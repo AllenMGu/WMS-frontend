@@ -1,427 +1,485 @@
-// 多仓库管理系统通用脚本
+/* ==========================================================================
+ * 药品GSP仓储与质量管理系统 - 前端共享脚本
+ * 认证 / 布局 / API（含电子签名门禁）/ 弹窗 / Toast / 表格 / 参考数据
+ * ========================================================================== */
+'use strict';
 
-// API基础URL
-const API_BASE_URL = (window.WMS_CONFIG && window.WMS_CONFIG.apiBaseUrl) || '/api';
-
-// 当前用户信息
+const API_BASE_URL = 'api';
 let currentUser = null;
-let userWarehouses = [];
 let currentWarehouse = null;
 
-// 页面加载完成后执行
-document.addEventListener('DOMContentLoaded', function() {
-    // 初始化通用功能
-    initCommon();
-});
-
-// 初始化通用功能
-function initCommon() {
-    // 检查登录状态
-    checkLoginStatus();
-    
-    // 设置侧边栏切换
-    setupSidebarToggle();
-    
-    // 设置仓库选择器
-    setupWarehouseSelector();
-    
-    // 设置用户菜单
-    setupUserMenu();
-    
-    // 设置退出登录
-    setupLogout();
+/* ----------------------------- 工具函数 ----------------------------- */
+function esc(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function fmtDT(value) {
+    if (!value) return '-';
+    const d = new Date(value);
+    if (isNaN(d)) return String(value);
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function fmtD(value) {
+    if (!value) return '-';
+    const d = new Date(value);
+    if (isNaN(d)) return String(value);
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function fmtNum(value) {
+    if (value === null || value === undefined) return '-';
+    const n = Number(value);
+    if (isNaN(n)) return String(value);
+    return Number.isInteger(n) ? String(n) : n.toFixed(3).replace(/\.?0+$/, '');
+}
+function debounce(fn, wait) {
+    let t;
+    return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); };
+}
+function todayISO() {
+    return new Date().toISOString().slice(0, 10);
+}
+function nowLocalISO() {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-// 检查登录状态
-function checkLoginStatus() {
-    let token = localStorage.getItem('access_token');
-    const userInfo = localStorage.getItem('user');
-    const expiry = localStorage.getItem('token_expiry');
-
-    if (!token) {
-        const legacyToken = localStorage.getItem('token');
-        if (legacyToken) {
-            localStorage.setItem('access_token', legacyToken);
-            localStorage.removeItem('token');
-            token = legacyToken;
-        }
+/* ----------------------------- 认证 ----------------------------- */
+function getStoredAuth() {
+    const read = (s) => ({ token: s.getItem('access_token'), user: s.getItem('user'), expiry: s.getItem('token_expiry') });
+    const complete = (a) => !!(a.token && a.user);
+    const valid = (a) => !(a.expiry && new Date() >= new Date(a.expiry));
+    const pick = (a, b) => (complete(a) && valid(a) ? a : complete(b) && valid(b) ? b : complete(a) ? a : complete(b) ? b : null);
+    const own = pick(read(localStorage), read(sessionStorage));
+    if (own) return own;
+    const legacy = localStorage.getItem('token');
+    if (legacy) {
+        localStorage.setItem('access_token', legacy);
+        localStorage.removeItem('token');
+        return { token: legacy, user: localStorage.getItem('user'), expiry: localStorage.getItem('token_expiry') };
     }
-    
-    if (!token || !userInfo) {
-        // 未登录，跳转到登录页
-        window.location.href = 'index.html';
-        return;
-    }
-
-    if (expiry && new Date() >= new Date(expiry)) {
-        logout();
-        return;
-    }
-    
-    try {
-        currentUser = JSON.parse(userInfo);
-        userWarehouses = currentUser.warehouses || [];
-
-        // 更新用户信息显示
-        updateUserDisplay();
-
-        // 设置当前仓库
-        if (currentUser.current_warehouse_id) {
-            currentWarehouse = userWarehouses.find(w => w.id === currentUser.current_warehouse_id);
-            updateWarehouseDisplay();
-        }
-
-        // 根据用户角色隐藏或显示仓库管理导航链接
-        if (getCurrentUserRole() !== 'admin') {
-            const warehouseNavLinks = document.querySelectorAll('a[href="warehouse.html"]');
-            warehouseNavLinks.forEach(link => {
-                link.style.display = 'none';
-            });
-        }
-
-        // 页面特定初始化
-        if (typeof pageInit === 'function') {
-            pageInit();
-        }
-    } catch (error) {
-        console.error('解析用户信息失败:', error);
-        logout();
+    return null;
+}
+function storeAuth(data, remember) {
+    const storage = remember ? localStorage : sessionStorage;
+    storage.removeItem('access_token'); storage.removeItem('user'); storage.removeItem('token_expiry');
+    if (!remember) { localStorage.removeItem('access_token'); localStorage.removeItem('user'); localStorage.removeItem('token_expiry'); }
+    storage.setItem('access_token', data.access_token);
+    storage.setItem('user', JSON.stringify(data.user));
+    if (data.expiry) storage.setItem('token_expiry', data.expiry);
+    else if (remember) {
+        const d = new Date(); d.setDate(d.getDate() + 7);
+        storage.setItem('token_expiry', d.toISOString());
     }
 }
-
-// 更新用户信息显示
-function updateUserDisplay() {
-    if (currentUser) {
-        // 更新用户头像首字母
-        const initials = currentUser.full_name ? currentUser.full_name.charAt(0).toUpperCase() : 'U';
-        document.getElementById('userInitials').textContent = initials;
-        
-        // 更新用户名
-        document.getElementById('userName').textContent = currentUser.full_name || currentUser.username;
-    }
-}
-
-// 更新仓库显示
-function updateWarehouseDisplay() {
-    if (currentWarehouse) {
-        document.getElementById('currentWarehouse').textContent = currentWarehouse.name;
-    } else if (userWarehouses.length > 0) {
-        currentWarehouse = userWarehouses[0];
-        document.getElementById('currentWarehouse').textContent = currentWarehouse.name;
-    } else {
-        document.getElementById('currentWarehouse').textContent = '无可用仓库';
-    }
-}
-
-// 设置侧边栏切换
-function setupSidebarToggle() {
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    const sidebar = document.getElementById('sidebar');
-    
-    if (sidebarToggle && sidebar) {
-        sidebarToggle.addEventListener('click', function() {
-            sidebar.classList.toggle('hidden');
-        });
-    }
-}
-
-// 设置仓库选择器
-function setupWarehouseSelector() {
-    const selector = document.getElementById('warehouseSelector');
-    const dropdown = document.getElementById('warehouseDropdown');
-    const list = document.getElementById('warehouseList');
-    
-    if (!selector || !dropdown || !list) return;
-    
-    // 点击选择器切换下拉框
-    selector.addEventListener('click', function(e) {
-        e.stopPropagation();
-        dropdown.classList.toggle('hidden');
-        updateWarehouseList();
-    });
-    
-    // 点击其他地方关闭下拉框
-    document.addEventListener('click', function() {
-        dropdown.classList.add('hidden');
-    });
-    
-    // 阻止下拉框内点击事件冒泡
-    dropdown.addEventListener('click', function(e) {
-        e.stopPropagation();
-    });
-}
-
-// 更新仓库列表
-function updateWarehouseList() {
-    const list = document.getElementById('warehouseList');
-    
-    if (!list) return;
-    
-    list.innerHTML = '';
-    
-    if (userWarehouses.length === 0) {
-        list.innerHTML = `
-            <div class="px-4 py-2 text-sm text-gray-500">
-                无可用仓库
-            </div>
-        `;
-        return;
-    }
-    
-    userWarehouses.forEach(warehouse => {
-        const item = document.createElement('div');
-        item.className = `px-4 py-2 text-sm cursor-pointer hover:bg-gray-100 ${currentWarehouse && currentWarehouse.id === warehouse.id ? 'bg-primary text-white' : 'text-gray-700'}`;
-        item.innerHTML = `
-            <div class="flex items-center justify-between">
-                <span>${warehouse.name}</span>
-                ${warehouse.is_default ? '<span class="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">默认</span>' : ''}
-            </div>
-            <div class="text-xs text-gray-500">${warehouse.code}</div>
-        `;
-        
-        item.addEventListener('click', function() {
-            switchWarehouse(warehouse.id);
-        });
-        
-        list.appendChild(item);
-    });
-}
-
-// 切换仓库
-async function switchWarehouse(warehouseId) {
-    try {
-        const params = new URLSearchParams({ warehouse_id: warehouseId });
-        const response = await fetch(`${API_BASE_URL}/users/${currentUser.id}/switch-warehouse?${params.toString()}`, {
-            method: 'POST',
-            headers: getHeaders()
-        });
-        
-        if (!response.ok) {
-            throw new Error('切换仓库失败');
-        }
-        
-        const result = await response.json();
-        
-        // 更新当前仓库
-        currentWarehouse = userWarehouses.find(w => w.id === warehouseId);
-        currentUser.current_warehouse_id = warehouseId;
-        
-        // 更新本地存储
-        localStorage.setItem('user', JSON.stringify(currentUser));
-        
-        // 更新显示
-        updateWarehouseDisplay();
-        updateWarehouseList();
-        
-        // 关闭下拉框
-        document.getElementById('warehouseDropdown').classList.add('hidden');
-        
-        // 显示提示
-        showToast('仓库切换成功', 'success');
-        
-        // 刷新页面数据
-        if (typeof loadLocations === 'function') loadLocations();
-        if (typeof loadGoods === 'function') loadGoods();
-        if (typeof loadStock === 'function') loadStock();
-        if (typeof loadInboundOrders === 'function') loadInboundOrders();
-        if (typeof loadOutboundOrders === 'function') loadOutboundOrders();
-        if (typeof loadCheckRecords === 'function') loadCheckRecords();
-        
-    } catch (error) {
-        console.error('切换仓库失败:', error);
-        showToast('切换仓库失败', 'error');
-    }
-}
-
-// 设置用户菜单
-function setupUserMenu() {
-    const userMenu = document.getElementById('userMenu');
-    const dropdown = document.getElementById('userDropdown');
-    
-    if (!userMenu || !dropdown) return;
-    
-    // 点击用户菜单切换下拉框
-    userMenu.addEventListener('click', function(e) {
-        e.stopPropagation();
-        dropdown.classList.toggle('hidden');
-    });
-    
-    // 点击其他地方关闭下拉框
-    document.addEventListener('click', function() {
-        dropdown.classList.add('hidden');
-    });
-    
-    // 阻止下拉框内点击事件冒泡
-    dropdown.addEventListener('click', function(e) {
-        e.stopPropagation();
-    });
-}
-
-// 设置退出登录
-function setupLogout() {
-    const logoutButton = document.getElementById('logoutButton');
-    
-    if (logoutButton) {
-        logoutButton.addEventListener('click', function(e) {
-            e.preventDefault();
-            logout();
-        });
-    }
-}
-
-// 退出登录
 function logout() {
-    // 清除本地存储
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('token_expiry');
-    
-    // 跳转到登录页
+    localStorage.removeItem('access_token'); localStorage.removeItem('user'); localStorage.removeItem('token_expiry');
+    sessionStorage.removeItem('access_token'); sessionStorage.removeItem('user'); sessionStorage.removeItem('token_expiry');
     window.location.href = 'index.html';
 }
-
-// 获取请求头
-function getHeaders() {
-    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
-    return {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-    };
+function getToken() {
+    const a = getStoredAuth();
+    return a ? a.token : null;
+}
+function getAuthHeaders(sigToken) {
+    const h = { 'Content-Type': 'application/json' };
+    const t = getToken();
+    if (t) h['Authorization'] = 'Bearer ' + t;
+    if (sigToken) h['X-GSP-Signature-Token'] = sigToken;
+    return h;
 }
 
-// 显示提示消息
-function showToast(message, type = 'info') {
-    // 创建提示元素
-    const toast = document.createElement('div');
-    toast.className = `fixed top-4 right-4 px-6 py-3 rounded-md shadow-lg z-50 transform transition-all duration-300 translate-x-full opacity-0`;
-    
-    // 根据类型设置样式
-    if (type === 'success') {
-        toast.classList.add('bg-green-500', 'text-white');
-        toast.innerHTML = `<i class="fa fa-check-circle mr-2"></i>${message}`;
-    } else if (type === 'error') {
-        toast.classList.add('bg-red-500', 'text-white');
-        toast.innerHTML = `<i class="fa fa-times-circle mr-2"></i>${message}`;
-    } else if (type === 'warning') {
-        toast.classList.add('bg-yellow-500', 'text-white');
-        toast.innerHTML = `<i class="fa fa-exclamation-triangle mr-2"></i>${message}`;
-    } else {
-        toast.classList.add('bg-blue-500', 'text-white');
-        toast.innerHTML = `<i class="fa fa-info-circle mr-2"></i>${message}`;
+/* ----------------------------- API ----------------------------- */
+class ApiError extends Error {
+    constructor(message, status, detail) { super(message); this.status = status; this.detail = detail; }
+}
+function extractDetailMessage(detail) {
+    if (!detail) return '请求失败';
+    if (typeof detail === 'string') return detail;
+    if (detail.message) {
+        if (detail.findings && detail.findings.length) {
+            return detail.message + '：' + detail.findings.map(f => `${f.code || ''}${f.message || ''}`).join('；');
+        }
+        return detail.message;
     }
-    
-    // 添加到页面
-    document.body.appendChild(toast);
-    
-    // 显示提示
-    setTimeout(() => {
-        toast.classList.remove('translate-x-full', 'opacity-0');
-    }, 100);
-    
-    // 自动隐藏
-    setTimeout(() => {
-        toast.classList.add('translate-x-full', 'opacity-0');
-        
-        // 移除元素
-        setTimeout(() => {
-            document.body.removeChild(toast);
-        }, 300);
-    }, 3000);
+    if (Array.isArray(detail)) return detail.map(d => d.msg || JSON.stringify(d)).join('；');
+    return JSON.stringify(detail);
+}
+async function api(path, opts = {}) {
+    const { method = 'GET', body = null, sigToken = null, form = false } = opts;
+    const headers = sigToken ? getAuthHeaders(sigToken) : getAuthHeaders();
+    const init = { method, headers };
+    if (body !== null) {
+        init.body = form ? new URLSearchParams(body).toString() : JSON.stringify(body);
+        if (form) delete headers['Content-Type'], headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    }
+    let res;
+    try {
+        res = await fetch(`${API_BASE_URL}${path}`, init);
+    } catch (e) {
+        throw new ApiError('网络请求失败，请检查后端服务是否可用', 0, null);
+    }
+    let data = null;
+    const text = await res.text();
+    try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
+    if (!res.ok) {
+        if (res.status === 401) { logout(); throw new ApiError('登录已过期，请重新登录', 401, null); }
+        throw new ApiError(extractDetailMessage(data), res.status, data);
+    }
+    return data;
 }
 
-// 获取当前用户角色
-function getCurrentUserRole() {
-    return currentUser ? currentUser.role : 'operator';
-}
-
-// 获取仓库名称
-function getWarehouseName(warehouseId) {
-    const warehouse = userWarehouses.find(w => w.id === warehouseId);
-    return warehouse ? warehouse.name : '未知仓库';
-}
-
-// 格式化日期时间
-function formatDateTime(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleString('zh-CN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
+/* ----------------------------- 电子签名 ----------------------------- */
+async function createSignatureChallenge({ action, entity_type, entity_id, meaning, payload, reason, password }) {
+    return api('/gsp/electronic-signatures/challenges', {
+        method: 'POST',
+        body: { action, entity_type, entity_id, meaning, payload: payload || {}, reason, password },
     });
 }
-
-// 格式化日期
-function formatDate(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('zh-CN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
+async function signAndCall(path, opts, sigSpec, reason, password) {
+    const challenge = await createSignatureChallenge({
+        action: sigSpec.action,
+        entity_type: sigSpec.entity_type,
+        entity_id: String(sigSpec.entity_id),
+        meaning: sigSpec.meaning,
+        payload: opts.body || {},
+        reason,
+        password,
     });
+    return api(path, { ...opts, sigToken: challenge.signature_token });
 }
-
-// 格式化金额
-function formatCurrency(amount) {
-    return new Intl.NumberFormat('zh-CN', {
-        style: 'currency',
-        currency: 'CNY',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }).format(amount);
-}
-
-// 生成随机ID
-function generateId() {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
-}
-
-// 验证表单字段
-function validateField(value, type = 'required', min = null, max = null) {
-    if (type === 'required' && !value) {
-        return false;
-    }
-    
-    if (type === 'number' && value) {
-        const num = parseFloat(value);
-        if (isNaN(num)) return false;
-        if (min !== null && num < min) return false;
-        if (max !== null && num > max) return false;
-    }
-    
-    if (type === 'length' && value) {
-        if (min !== null && value.length < min) return false;
-        if (max !== null && value.length > max) return false;
-    }
-    
-    return true;
-}
-
-// 防抖函数
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
-
-// 节流函数
-function throttle(func, limit) {
-    let inThrottle;
-    return function() {
-        const args = arguments;
-        const context = this;
-        if (!inThrottle) {
-            func.apply(context, args);
-            inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
+/* 打开电子签名确认弹窗：reason + password，然后执行 signedCall(reason, password) */
+function openSignatureModal(title, signedCall) {
+    const modal = openModal({
+        title: title || '电子签名确认',
+        size: 'sm',
+        body: `
+            <div class="form-group">
+                <label class="form-label">变更原因（≥3字，将写入审计链与签名记录）</label>
+                <textarea id="sigReason" class="input-field" rows="2" placeholder="请输入操作原因"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">登录密码（用于本人电子签名核验）</label>
+                <input type="password" id="sigPassword" class="input-field" placeholder="请输入当前用户密码">
+            </div>
+        `,
+        footer: `
+            <button class="btn btn-secondary" data-close>取消</button>
+            <button class="btn btn-primary" id="sigConfirmBtn"><i class="fa fa-pencil"></i> 确认签署</button>
+        `,
+    });
+    const reasonEl = modal.querySelector('#sigReason');
+    const passEl = modal.querySelector('#sigPassword');
+    const btn = modal.querySelector('#sigConfirmBtn');
+    const doSign = async () => {
+        const reason = reasonEl.value.trim();
+        const password = passEl.value;
+        if (reason.length < 3) { showToast('变更原因不能少于3个字', 'warning'); return; }
+        if (!password) { showToast('请输入登录密码', 'warning'); return; }
+        btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 签署中...';
+        try {
+            await signedCall(reason, password);
+            closeModal(modal);
+        } catch (e) {
+            showToast(e.message || '电子签名或操作失败', 'error');
+        } finally {
+            btn.disabled = false; btn.innerHTML = '<i class="fa fa-pencil"></i> 确认签署';
         }
     };
+    btn.addEventListener('click', doSign);
+    modal.querySelector('[data-close]').addEventListener('click', () => closeModal(modal));
+    reasonEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSign(); });
+    setTimeout(() => passEl.focus(), 100);
+    return modal;
 }
+/* 便捷封装：页面只需提供 sigSpec + 业务调用 */
+function signAction(sigSpec, businessCall, title) {
+    openSignatureModal(title || `${sigSpec.action} - 需要电子签名`, async (reason, password) => {
+        const opts = businessCall.opts || {};
+        // 业务请求体中的 reason 若为空，则复用签名弹窗填写的变更原因（接口要求 ≥3 字）
+        let body = opts.body;
+        if (body && typeof body === 'object' && !Array.isArray(body)) {
+            body = { ...body };
+            if (body.reason === undefined || body.reason === null || body.reason === '') {
+                body.reason = reason;
+            }
+        }
+        const data = await signAndCall(businessCall.path, { ...opts, body }, sigSpec, reason, password);
+        showToast('操作成功', 'success');
+        if (businessCall.onSuccess) await businessCall.onSuccess(data);
+    });
+}
+
+/* ----------------------------- Toast ----------------------------- */
+function showToast(message, type = 'info') {
+    let container = document.getElementById('toastContainer');
+    if (!container) { container = document.createElement('div'); container.id = 'toastContainer'; document.body.appendChild(container); }
+    const toast = document.createElement('div');
+    const icons = { success: 'fa-check-circle', error: 'fa-times-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `<i class="fa ${icons[type] || icons.info}"></i><span>${esc(message)}</span>`;
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 350); }, 3200);
+}
+
+/* ----------------------------- 模态框 ----------------------------- */
+function openModal({ title = '', body = '', footer = '', size = 'md' }) {
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content modal-${size}">
+            <div class="modal-header">
+                <div class="modal-title">${esc(title)}</div>
+                <button type="button" class="modal-close" data-close>&times;</button>
+            </div>
+            <div class="modal-body">${body}</div>
+            ${footer ? `<div class="modal-footer">${footer}</div>` : ''}
+        </div>`;
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
+    // 绑定所有 data-close 元素（标题栏 × 与底部“取消”按钮），避免只绑到第一个
+    modal.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', () => closeModal(modal)));
+    document.body.appendChild(modal);
+    requestAnimationFrame(() => modal.classList.add('show'));
+    return modal;
+}
+function closeModal(modal) {
+    if (!modal) return;
+    modal.classList.remove('show');
+    setTimeout(() => modal.remove(), 200);
+}
+function confirmModal(message, onOk, okText = '确认') {
+    const modal = openModal({
+        title: '操作确认',
+        size: 'sm',
+        body: `<div class="alert alert-warning"><i class="fa fa-exclamation-triangle mr-2"></i>${esc(message)}</div>`,
+        footer: `
+            <button class="btn btn-secondary" data-close>取消</button>
+            <button class="btn btn-primary" id="confirmOkBtn">${esc(okText)}</button>
+        `,
+    });
+    modal.querySelector('#confirmOkBtn').addEventListener('click', async () => {
+        try { await onOk(); closeModal(modal); } catch (e) { showToast(e.message || '操作失败', 'error'); }
+    });
+    return modal;
+}
+
+/* ----------------------------- 徽章 / 状态映射 ----------------------------- */
+function badge(text, cls) {
+    return `<span class="badge badge-${cls || 'gray'}">${esc(text)}</span>`;
+}
+/* 资质文件类型：后端存储为英文代码（GSP审计代码化），前端统一显示中文 */
+const DOC_LABELS = {
+    // 合作方资质
+    BUSINESS_LICENSE: '营业执照',
+    DRUG_LICENSE: '药品经营许可证',
+    QUALITY_AGREEMENT: '质量保证协议',
+    SALES_AUTHORIZATION: '销售授权书',
+    PROCUREMENT_AUTHORIZATION: '采购授权书',
+    // 承运方资质
+    TRANSPORT_LICENSE: '运输许可证',
+    ROAD_TRANSPORT_CERT: '道路运输证',
+    OTHER: '其他',
+};
+function docTypeLabel(code) {
+    return DOC_LABELS[code] || code || '-';
+}
+const STATUS_LABELS = {
+    DRAFT: ['草稿', 'gray'], PENDING: ['待审批', 'warning'], PENDING_INSPECTION: ['待验收', 'warning'],
+    PENDING_APPROVAL: ['待批准', 'warning'], PENDING_QUALITY: ['待质量处理', 'warning'],
+    SUBMITTED: ['已提交', 'info'], APPROVED: ['已批准', 'success'], RELEASED: ['已放行', 'success'],
+    ACTIVE: ['进行中', 'info'], OPEN: ['开启', 'danger'], ACKNOWLEDGED: ['已确认', 'warning'],
+    RESOLVED: ['已解决', 'success'], CLOSED: ['已关闭', 'gray'], CANCELLED: ['已取消', 'gray'],
+    SUSPENDED: ['已暂停', 'danger'], ALLOCATED: ['已分配', 'info'], PICKED: ['已拣货', 'info'],
+    PREPARED: ['已备货', 'warning'], REVIEWED: ['已复核', 'success'], DISPATCHED: ['已发运', 'success'],
+    IN_TRANSIT: ['在途', 'info'], EXCEPTION: ['异常', 'danger'], DELIVERED: ['已送达', 'success'],
+    RECEIVED: ['已收货', 'info'], SAMPLED: ['已抽样', 'info'], INSPECTED: ['已验收', 'success'],
+    COMPLETED: ['已完成', 'success'], REQUESTED: ['已申请', 'warning'], IMPLEMENTED: ['已实施', 'success'],
+    VERIFIED: ['已核验', 'success'], RECORDED: ['已登记', 'info'], REVIEWED_: ['已复核', 'success'],
+    ACCEPTED: ['已接受', 'success'], REJECTED: ['已拒绝', 'danger'], FAILED: ['失败', 'danger'],
+    AVAILABLE: ['可用', 'success'], HOLD: ['锁定', 'danger'], SUCCESS: ['成功', 'success'],
+    RETRY: ['重试中', 'warning'], ACTIVATED: ['已启动', 'info'], EXPIRED: ['已过期', 'danger'],
+    CREATED: ['已创建', 'gray'], PENDING_REVIEW: ['待复核', 'warning'], DRAFTED: ['草稿', 'gray'],
+};
+function statusBadge(status) {
+    const key = String(status || '').toUpperCase();
+    if (STATUS_LABELS[key]) return badge(STATUS_LABELS[key][0], STATUS_LABELS[key][1]);
+    return badge(status || '-', 'gray');
+}
+function boolBadge(v, yes = '是', no = '否') {
+    return v ? badge(yes, 'success') : badge(no, 'gray');
+}
+
+/* ----------------------------- 布局 ----------------------------- */
+const NAV_GROUPS = [
+    { title: '总览', items: [
+        { page: 'dashboard.html', icon: 'fa-dashboard', label: '合规概览' },
+    ]},
+    { title: '质量主数据', items: [
+        { page: 'goods.html', icon: 'fa-barcode', label: '货物管理' },
+        { page: 'partners.html', icon: 'fa-handshake-o', label: '合作方管理' },
+        { page: 'products.html', icon: 'fa-cubes', label: '药品与批次' },
+        { page: 'users.html', icon: 'fa-users', label: '用户与岗位' },
+    ]},
+    { title: '业务闭环', items: [
+        { page: 'procurement.html', icon: 'fa-arrow-down', label: '采购与收货' },
+        { page: 'sales.html', icon: 'fa-arrow-up', label: '销售与发运' },
+        { page: 'returns.html', icon: 'fa-undo', label: '销后退回' },
+        { page: 'recalls.html', icon: 'fa-bullhorn', label: '召回与演练' },
+    ]},
+    { title: '质量活动', items: [
+        { page: 'maintenance.html', icon: 'fa-stethoscope', label: '药品养护' },
+        { page: 'stocktaking.html', icon: 'fa-list-alt', label: '批号库存盘点' },
+        { page: 'disposition.html', icon: 'fa-exclamation-triangle', label: '不合格品处置' },
+    ]},
+    { title: '物流与监测', items: [
+        { page: 'transport.html', icon: 'fa-truck', label: '运输与签收' },
+        { page: 'environment.html', icon: 'fa-thermometer-half', label: '温湿度监测' },
+    ]},
+    { title: '合规与运维', items: [
+        { page: 'signatures.html', icon: 'fa-pencil-square-o', label: '电子签名台账' },
+        { page: 'audit.html', icon: 'fa-shield', label: '审计追踪' },
+        { page: 'trace.html', icon: 'fa-search', label: '批号追溯' },
+        { page: 'operations.html', icon: 'fa-gears', label: '运维合规' },
+    ]},
+];
+function renderShell(activePage, pageTitle) {
+    const shell = document.getElementById('appShell');
+    if (!shell) return;
+    const sidebar = NAV_GROUPS.map(g => `
+        <div class="nav-group">
+            <div class="nav-group-title">${esc(g.title)}</div>
+            ${g.items.map(it => `
+                <a href="${it.page}" class="nav-item ${activePage === it.page ? 'active' : ''}" data-route="${it.page}">
+                    <i class="fa ${it.icon}"></i><span>${esc(it.label)}</span>
+                </a>`).join('')}
+        </div>`).join('');
+    const initials = currentUser ? (currentUser.full_name || currentUser.username || 'U').charAt(0).toUpperCase() : 'U';
+    const userName = currentUser ? (currentUser.full_name || currentUser.username) : '加载中...';
+    shell.innerHTML = `
+        <aside class="sidebar">
+            <div class="p-4 flex items-center gap-2 border-b">
+                <div class="user-avatar">${esc(initials)}</div>
+                <div>
+                    <div class="font-semibold" style="font-size:13px">药品GSP仓储</div>
+                    <div class="text-xs text-gray-500">质量管理系统</div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">${sidebar}</nav>
+        </aside>
+        <div class="main-area">
+            <header class="topbar">
+                <div class="page-title">${esc(pageTitle || '')}</div>
+                <div class="flex items-center gap-3">
+                    <div class="relative" id="userMenuWrap">
+                        <button class="flex items-center gap-2" id="userMenuBtn" style="background:none;border:none">
+                            <div class="user-avatar">${esc(initials)}</div>
+                            <span class="text-sm font-medium text-gray-700">${esc(userName)}</span>
+                            <i class="fa fa-chevron-down text-xs text-gray-500"></i>
+                        </button>
+                        <div id="userDropdown" class="dropdown hidden">
+                            <div class="px-4 py-2 border-b" style="font-size:12px;color:var(--gray-500)">
+                                角色：<span id="userRoleText">-</span><br>仓库：<span id="userWarehouseText">-</span>
+                            </div>
+                            <a href="#" id="logoutButton" class="dropdown-item"><i class="fa fa-sign-out mr-2"></i>退出登录</a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            <main class="page-content" id="pageContent"></main>
+        </div>`;
+    const menuBtn = shell.querySelector('#userMenuBtn');
+    const dropdown = shell.querySelector('#userDropdown');
+    menuBtn.addEventListener('click', (e) => { e.stopPropagation(); dropdown.classList.toggle('hidden'); });
+    document.addEventListener('click', () => dropdown.classList.add('hidden'));
+    shell.querySelector('#logoutButton').addEventListener('click', (e) => { e.preventDefault(); logout(); });
+    if (currentUser) {
+        shell.querySelector('#userRoleText').textContent = (currentUser.role || 'operator');
+        shell.querySelector('#userWarehouseText').textContent = currentUser.current_warehouse_name || '未指定';
+    }
+}
+
+/* ----------------------------- 参考数据（带缓存） ----------------------------- */
+const refCache = {};
+async function refWarehouses(force) {
+    if (!force && refCache.warehouses) return refCache.warehouses;
+    refCache.warehouses = await api('/warehouses/');
+    return refCache.warehouses;
+}
+async function refLocations(force) {
+    if (!force && refCache.locations) return refCache.locations;
+    refCache.locations = await api('/locations/');
+    return refCache.locations;
+}
+async function refGoods(force) {
+    if (!force && refCache.goods) return refCache.goods;
+    refCache.goods = await api('/goods/');
+    return refCache.goods;
+}
+async function refUsers(force) {
+    if (!force && refCache.users) return refCache.users;
+    refCache.users = await api('/users/');
+    return refCache.users;
+}
+async function refPartners(force) {
+    if (!force && refCache.partners) return refCache.partners;
+    refCache.partners = await api('/gsp/partners');
+    return refCache.partners;
+}
+async function refProfiles(force) {
+    if (!force && refCache.profiles) return refCache.profiles;
+    refCache.profiles = await api('/gsp/products');
+    return refCache.profiles;
+}
+async function refBatches(force) {
+    if (!force && refCache.batches) return refCache.batches;
+    refCache.batches = await api('/gsp/batches');
+    return refCache.batches;
+}
+async function refBatchStock(force) {
+    if (!force && refCache.batchStock) return refCache.batchStock;
+    refCache.batchStock = await api('/gsp/batch-stock');
+    return refCache.batchStock;
+}
+async function refHolds(force) {
+    if (!force && refCache.holds) return refCache.holds;
+    refCache.holds = await api('/gsp/quality-holds');
+    return refCache.holds;
+}
+async function refCarriers(force) {
+    if (!force && refCache.carriers) return refCache.carriers;
+    refCache.carriers = await api('/gsp/transport/carriers');
+    return refCache.carriers;
+}
+function optionHTML(items, valueKey, labelKey, placeholder) {
+    const opts = [placeholder ? `<option value="">${esc(placeholder)}</option>` : ''];
+    for (const it of items || []) {
+        const label = typeof labelKey === 'function' ? labelKey(it) : it[labelKey];
+        opts.push(`<option value="${esc(it[valueKey])}">${esc(label)}</option>`);
+    }
+    return opts.join('');
+}
+
+/* ----------------------------- 页面引导 ----------------------------- */
+document.addEventListener('DOMContentLoaded', async function () {
+    const auth = getStoredAuth();
+    if (!auth) { window.location.href = 'index.html'; return; }
+    try {
+        currentUser = JSON.parse(auth.user);
+    } catch (e) {
+        logout(); return;
+    }
+    const page = (window.location.pathname.split('/').pop() || 'index.html');
+    if (page === 'index.html') { window.location.href = 'dashboard.html'; return; }
+    renderShell(page, window.PAGE_TITLE || '');
+    if (typeof window.pageInit === 'function') {
+        try { await window.pageInit(); } catch (e) {
+            console.error('pageInit error:', e);
+            showToast(e.message || '页面初始化失败', 'error');
+        }
+    }
+});
