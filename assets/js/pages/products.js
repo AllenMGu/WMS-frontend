@@ -7,7 +7,7 @@ let goodsList = [];
 let partners = [];
 
 window.pageInit = async function () {
-    await Promise.all([refGoods(), refPartners()]).then(([g, p]) => { goodsList = g; partners = p; }).catch(() => {});
+    await Promise.all([refGoods(), refPartners()]).then(([g, p]) => { goodsList = g; partners = p; });
     render();
     await loadTab();
 };

@@ -7,7 +7,7 @@ let batchStock = [];
 let warehouses = [];
 
 window.pageInit = async function () {
-    await Promise.all([refWarehouses(), refBatchStock(true)]).then(([w, s]) => { warehouses = w; batchStock = s; }).catch(() => {});
+    await Promise.all([refWarehouses(), refBatchStock(true)]).then(([w, s]) => { warehouses = w; batchStock = s; });
     render();
     await load();
 };

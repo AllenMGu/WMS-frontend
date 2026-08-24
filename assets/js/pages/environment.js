@@ -10,7 +10,7 @@ let warehouses = [];
 let locations = [];
 
 window.pageInit = async function () {
-    try { [warehouses, locations] = await Promise.all([refWarehouses(), refLocations()]); } catch (e) { /* ignore */ }
+    [warehouses, locations] = await Promise.all([refWarehouses(), refLocations()]);
     render();
     await loadTab();
 };

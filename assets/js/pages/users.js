@@ -45,7 +45,7 @@ async function load() {
         renderTables();
     } catch (e) {
         showToast(e.message || '加载失败（用户列表需管理员权限）', 'error');
-        try { roles = await api('/gsp/roles'); renderTables(); } catch (e2) { /* ignore */ }
+        try { roles = await api('/gsp/roles'); renderTables(); } catch (e2) { showToast(e2.message || '岗位列表加载失败', 'error'); }
     }
 }
 

@@ -13,8 +13,8 @@ let carriers = [];   // {id, name, vehicles:[], drivers:[]}
 window.pageInit = async function () {
     await Promise.all([refGoods(), refPartners(), refWarehouses()]).then(([g, p, w]) => {
         goodsList = g; customers = p.filter(x => ['CUSTOMER', 'BOTH'].includes(x.partner_type)); warehouses = w;
-    }).catch(() => {});
-    try { carriers = await loadCarriers(); } catch (e) { carriers = []; }
+    });
+    try { carriers = await loadCarriers(); } catch (e) { carriers = []; showToast(`承运方加载失败：${e.message}`, 'error'); }
     render();
     await loadTab();
 };

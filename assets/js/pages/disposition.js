@@ -9,7 +9,7 @@ let batchStock = [];
 let users = [];
 
 window.pageInit = async function () {
-    await Promise.all([refBatchStock(true), refUsers()]).then(([s, u]) => { batchStock = s; users = u; }).catch(() => {});
+    await Promise.all([refBatchStock(true), refUsers()]).then(([s, u]) => { batchStock = s; users = u; });
     render();
     await loadTab();
 };
