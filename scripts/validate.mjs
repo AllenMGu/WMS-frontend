@@ -62,6 +62,12 @@ const common = readFileSync("assets/js/common.js", "utf8");
 if (!common.includes("window.WMS_CONFIG?.apiBaseUrl")) {
   errors.push("common.js 未从运行时配置读取 API 地址");
 }
+if (!common.includes("logoutOn401: false")) {
+  errors.push("电子签名身份再确认失败时仍可能触发全局退出");
+}
+if (!common.includes("typeof window.pageInit === 'function'")) {
+  errors.push("签名操作成功后未配置默认页面刷新");
+}
 
 const login = readFileSync("index.html", "utf8");
 if (!login.includes("window.WMS_CONFIG?.apiBaseUrl")) {
@@ -73,9 +79,24 @@ if (!recalls.includes("RECALL_COMPLETION_REPORT")) {
   errors.push("召回完成报告未接入电子签名策略");
 }
 
+const dashboard = readFileSync("assets/js/pages/dashboard.js", "utf8");
+if (dashboard.includes("catch (e) { rows = []; }")) {
+  errors.push("合规概览仍将接口错误误显示为无告警或无锁定");
+}
+
+const partners = readFileSync("assets/js/pages/partners.js", "utf8");
+if (partners.includes("catch (e) { docs = []; }")) {
+  errors.push("合作方资质接口错误仍被误显示为空清单");
+}
+
+const environment = readFileSync("assets/js/pages/environment.js", "utf8");
+if (!environment.includes("/verify-chain")) {
+  errors.push("温湿度监测页未接入读数链核验");
+}
+
 if (errors.length > 0) {
   console.error(errors.join("\n"));
   process.exit(1);
 }
 
-console.log(`已验证 ${htmlFiles.length} 个 HTML 页面、运行时 API 配置和关键 GSP 签名策略。`);
+console.log(`已验证 ${htmlFiles.length} 个 HTML 页面、运行时 API 配置、错误反馈和关键 GSP 签名策略。`);

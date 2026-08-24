@@ -110,7 +110,7 @@ function extractDetailMessage(detail) {
     return JSON.stringify(detail);
 }
 async function api(path, opts = {}) {
-    const { method = 'GET', body = null, sigToken = null, form = false } = opts;
+    const { method = 'GET', body = null, sigToken = null, form = false, logoutOn401 = true } = opts;
     const headers = sigToken ? getAuthHeaders(sigToken) : getAuthHeaders();
     const init = { method, headers };
     if (body !== null) {
@@ -127,7 +127,7 @@ async function api(path, opts = {}) {
     const text = await res.text();
     try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
     if (!res.ok) {
-        if (res.status === 401) { logout(); throw new ApiError('登录已过期，请重新登录', 401, null); }
+        if (res.status === 401 && logoutOn401) { logout(); throw new ApiError('登录已过期，请重新登录', 401, null); }
         throw new ApiError(extractDetailMessage(data), res.status, data);
     }
     return data;
@@ -138,6 +138,7 @@ async function createSignatureChallenge({ action, entity_type, entity_id, meanin
     return api('/gsp/electronic-signatures/challenges', {
         method: 'POST',
         body: { action, entity_type, entity_id, meaning, payload: payload || {}, reason, password },
+        logoutOn401: false,
     });
 }
 async function signAndCall(path, opts, sigSpec, reason, password) {
@@ -210,7 +211,11 @@ function signAction(sigSpec, businessCall, title) {
         }
         const data = await signAndCall(businessCall.path, { ...opts, body }, sigSpec, reason, password);
         showToast('操作成功', 'success');
-        if (businessCall.onSuccess) await businessCall.onSuccess(data);
+        if (businessCall.onSuccess) {
+            await businessCall.onSuccess(data);
+        } else if (typeof window.pageInit === 'function') {
+            await window.pageInit();
+        }
     });
 }
 

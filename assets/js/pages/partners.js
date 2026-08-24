@@ -155,7 +155,16 @@ function suspendPartner(id) {
 async function viewPartner(id) {
     const p = partners.find(x => x.id === id);
     let docs = [];
-    try { docs = await api(`/gsp/partners/${id}/documents`); } catch (e) { docs = []; }
+    try {
+        docs = await api(`/gsp/partners/${id}/documents`);
+    } catch (e) {
+        openModal({
+            title: `合作方资质 - ${p ? p.name : id}`,
+            size: 'sm',
+            body: `<div class="alert alert-error"><i class="fa fa-exclamation-circle mr-2"></i>资质文件加载失败：${esc(e.message)}</div>`,
+        });
+        return;
+    }
     // 该类型合作方批准所需的已核验文件清单
     const required = p.partner_type === 'SUPPLIER' ? ['BUSINESS_LICENSE', 'DRUG_LICENSE', 'QUALITY_AGREEMENT', 'SALES_AUTHORIZATION']
         : p.partner_type === 'CUSTOMER' ? ['BUSINESS_LICENSE', 'DRUG_LICENSE', 'PROCUREMENT_AUTHORIZATION']

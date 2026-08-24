@@ -90,7 +90,12 @@ async function loadSummary() {
 
 async function loadAlarms() {
     let rows = [];
-    try { rows = await api('/gsp/environment/alarms'); } catch (e) { rows = []; }
+    try {
+        rows = await api('/gsp/environment/alarms');
+    } catch (e) {
+        document.getElementById('alarmList').innerHTML = `<div class="alert alert-error" style="margin:16px"><i class="fa fa-exclamation-circle mr-2"></i>环境告警加载失败：${esc(e.message)}</div>`;
+        return;
+    }
     const open = rows.filter(r => ['OPEN', 'ACKNOWLEDGED'].includes(r.status)).slice(0, 8);
     document.getElementById('alarmList').innerHTML = open.length ? `
         <table class="data-table">
@@ -109,7 +114,12 @@ async function loadAlarms() {
 
 async function loadHolds() {
     let rows = [];
-    try { rows = await api('/gsp/quality-holds'); } catch (e) { rows = []; }
+    try {
+        rows = await api('/gsp/quality-holds');
+    } catch (e) {
+        document.getElementById('holdList').innerHTML = `<div class="alert alert-error" style="margin:16px"><i class="fa fa-exclamation-circle mr-2"></i>质量锁定加载失败：${esc(e.message)}</div>`;
+        return;
+    }
     const active = rows.filter(r => r.status === 'ACTIVE').slice(0, 10);
     document.getElementById('holdList').innerHTML = active.length ? `
         <table class="data-table">
