@@ -13,7 +13,7 @@ let locations = [];
 window.pageInit = async function () {
     await Promise.all([refGoods(), refPartners(), refWarehouses(), refLocations()]).then(([g, p, w, l]) => {
         goodsList = g; suppliers = p.filter(x => ['SUPPLIER', 'BOTH'].includes(x.partner_type)); warehouses = w; locations = l;
-    }).catch(() => {});
+    });
     render();
     await loadTab();
 };
@@ -378,10 +378,9 @@ function printRecord(receiptId) {
         printWindow.document.close();
         try {
             const record = await api(`/gsp/receiving/receipts/${receiptId}/print-records`, { method: 'POST', body });
-            const receipt = receipts.find(r => r.id === receiptId);
-            renderControlledReceiptPrint(printWindow, receipt, record);
+            renderControlledReceiptPrint(printWindow, record);
             closeModal(modal);
-            showToast('受控打印已登记，正在打开打印对话框', 'success');
+            showToast('受控副本已生成，正在打开打印对话框', 'success');
         } catch (e) {
             printWindow.close();
             showToast(e.message, 'error');
@@ -389,9 +388,12 @@ function printRecord(receiptId) {
     });
 }
 
-function renderControlledReceiptPrint(printWindow, receipt, record) {
-    const order = orders.find(o => o.id === receipt?.purchase_order_id);
-    const itemRows = (receipt?.items || []).map(item => `
+function renderControlledReceiptPrint(printWindow, record) {
+    const receipt = record.snapshot_data;
+    if (!receipt || !record.content_hash) {
+        throw new ApiError('后端未返回不可变受控打印快照', 0, record);
+    }
+    const itemRows = (receipt.items || []).map(item => `
         <tr>
             <td>${esc(item.batch_no || item.batch_id || '-')}</td>
             <td>${fmtNum(item.received_quantity)}</td>
@@ -424,7 +426,7 @@ function renderControlledReceiptPrint(printWindow, receipt, record) {
     <div class="subtitle">受控副本 · ${esc(record.copy_no)}</div>
     <div class="meta">
         <div>收货单号：${esc(receipt?.receipt_no || receipt?.id || '-')}</div>
-        <div>采购订单：${esc(order?.order_no || receipt?.purchase_order_id || '-')}</div>
+        <div>采购订单：${esc(receipt.purchase_order_no || receipt.purchase_order_id || '-')}</div>
         <div>送货单号：${esc(receipt?.delivery_document_no || '-')}</div>
         <div>到货时间：${fmtDT(receipt?.arrived_at)}</div>
         <div>收货状态：${esc(receipt?.status || '-')}</div>
@@ -438,9 +440,10 @@ function renderControlledReceiptPrint(printWindow, receipt, record) {
         <div>模板版本：${esc(record.template_version)}</div>
         <div>打印用途：${esc(record.purpose)}</div>
         <div>打印人员 ID：${esc(record.printed_by)}</div>
-        <div>登记时间：${fmtDT(record.printed_at)}</div>
+        <div>生成时间：${fmtDT(record.printed_at)}</div>
+        <div>内容哈希：${esc(record.content_hash)}</div>
     </div>
-    <div class="footer"><span>系统生成的受控打印副本</span><span>份号：${esc(record.copy_no)}</span></div>
+    <div class="footer"><span>不可变受控副本 · 状态：${esc(record.status)}</span><span>份号：${esc(record.copy_no)}</span></div>
 </body>
 </html>`;
     printWindow.document.open();
