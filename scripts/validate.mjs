@@ -93,6 +93,14 @@ const environment = readFileSync("assets/js/pages/environment.js", "utf8");
 if (!environment.includes("/verify-chain")) {
   errors.push("温湿度监测页未接入读数链核验");
 }
+if (!environment.includes("/alarms/scan-offline")) {
+  errors.push("温湿度监测页未接入离线点位扫描");
+}
+
+const procurement = readFileSync("assets/js/pages/procurement.js", "utf8");
+if (!procurement.includes("renderControlledReceiptPrint") || !procurement.includes("printWindow.print()")) {
+  errors.push("收货受控打印仍仅登记记录，未生成可打印副本");
+}
 
 if (errors.length > 0) {
   console.error(errors.join("\n"));

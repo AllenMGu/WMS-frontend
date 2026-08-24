@@ -368,6 +368,7 @@ async function renderAlarms(box) {
         <div class="card">
             <div class="card-header">
                 <span class="card-title"><i class="fa fa-bell mr-2" style="color:var(--red-500)"></i>温湿度告警（${open.length} 条未处理）</span>
+                <button class="btn btn-secondary btn-sm" id="scanOfflineBtn"><i class="fa fa-search"></i> 扫描离线点位</button>
             </div>
             <div class="card-body p-0 table-wrap">
                 <table class="data-table">
@@ -389,7 +390,19 @@ async function renderAlarms(box) {
                 </table>
             </div>
         </div>`;
+    box.querySelector('#scanOfflineBtn').addEventListener('click', scanOfflineAssignments);
 }
+
+function scanOfflineAssignments() {
+    confirmModal('扫描全部有效监测点位，并为超时未上报的点位生成离线告警？', async () => {
+        try {
+            const created = await api('/gsp/environment/alarms/scan-offline', { method: 'POST' });
+            showToast(created.length ? `已生成 ${created.length} 条离线告警` : '扫描完成，未发现新增离线告警', 'success');
+            await loadTab();
+        } catch (e) { showToast(e.message, 'error'); }
+    }, '开始扫描');
+}
+
 function ackAlarm(id) {
     confirmModal('确认该告警？确认后需继续质量决策处置。', async () => {
         try {
