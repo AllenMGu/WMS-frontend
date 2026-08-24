@@ -156,7 +156,7 @@ async function viewPartner(id) {
     const p = partners.find(x => x.id === id);
     let docs = [];
     try {
-        docs = await api(`/gsp/partners/${id}/documents`);
+        docs = await apiAll(`/gsp/partners/${id}/documents`);
     } catch (e) {
         openModal({
             title: `合作方资质 - ${p ? p.name : id}`,
