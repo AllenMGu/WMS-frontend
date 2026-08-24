@@ -97,6 +97,16 @@ if (!environment.includes("/alarms/scan-offline")) {
   errors.push("温湿度监测页未接入离线点位扫描");
 }
 
+if (!common.includes("/gsp/roles/me") || !common.includes("canAccessPage")) {
+  errors.push("前端未接入有效岗位导航控制");
+}
+if (common.includes("new Date().toISOString().slice(0, 10)")) {
+  errors.push("默认业务日期仍使用 UTC，非本地日期");
+}
+if (!common.includes("async function apiAll")) {
+  errors.push("目录查询缺少完整分页加载");
+}
+
 const procurement = readFileSync("assets/js/pages/procurement.js", "utf8");
 if (!procurement.includes("renderControlledReceiptPrint") || !procurement.includes("printWindow.print()")) {
   errors.push("收货受控打印仍仅登记记录，未生成可打印副本");
