@@ -11,8 +11,8 @@ let customers = [];
 window.pageInit = async function () {
     await Promise.all([refPartners(), refLocations()]).then(([p, l]) => {
         customers = p.filter(x => ['CUSTOMER', 'BOTH'].includes(x.partner_type)); locations = l;
-    }).catch(() => {});
-    try { [orders, shipments] = await Promise.all([api('/gsp/sales/orders'), api('/gsp/shipping/shipments')]); } catch (e) { /* ignore */ }
+    });
+    [orders, shipments] = await Promise.all([api('/gsp/sales/orders'), api('/gsp/shipping/shipments')]);
     render();
     await load();
 };
