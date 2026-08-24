@@ -4,7 +4,7 @@
  * ========================================================================== */
 'use strict';
 
-const API_BASE_URL = 'api';
+const API_BASE_URL = (window.WMS_CONFIG?.apiBaseUrl || '/api').replace(/\/+$/, '');
 let currentUser = null;
 let currentWarehouse = null;
 

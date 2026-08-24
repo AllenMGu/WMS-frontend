@@ -240,12 +240,23 @@ function completionReport(id) {
             reason: modal.querySelector('#crReason').value.trim(),
         };
         if (!body.report_ref || body.treatment_summary.length < 10 || body.effectiveness_evaluation.length < 10 || !body.regulatory_submission_ref || body.reason.length < 3) { showToast('请完整填写完成报告', 'warning'); return; }
-        try {
-            await api(`/gsp/recalls/${id}/completion-report`, { method: 'POST', body });
-            closeModal(modal);
-            showToast('完成报告已提交', 'success');
-            await loadTab();
-        } catch (e) { showToast(e.message, 'error'); }
+        signAction(
+            {
+                action: 'RECALL_COMPLETION_REPORT',
+                entity_type: 'GspRecall',
+                entity_id: id,
+                meaning: 'RESPONSIBILITY',
+            },
+            {
+                path: `/gsp/recalls/${id}/completion-report`,
+                opts: { method: 'POST', body },
+                onSuccess: async () => {
+                    closeModal(modal);
+                    await loadTab();
+                },
+            },
+            '提交召回完成报告'
+        );
     });
 }
 
