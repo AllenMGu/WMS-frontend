@@ -7,6 +7,7 @@
 const API_BASE_URL = (window.WMS_CONFIG?.apiBaseUrl || '/api').replace(/\/+$/, '');
 let currentUser = null;
 let currentWarehouse = null;
+let currentGspRoles = new Set();
 
 /* ----------------------------- 工具函数 ----------------------------- */
 function esc(value) {
@@ -40,7 +41,9 @@ function debounce(fn, wait) {
     return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); };
 }
 function todayISO() {
-    return new Date().toISOString().slice(0, 10);
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 function nowLocalISO() {
     const d = new Date();
@@ -131,6 +134,16 @@ async function api(path, opts = {}) {
         throw new ApiError(extractDetailMessage(data), res.status, data);
     }
     return data;
+}
+async function apiAll(path, pageSize = 500) {
+    const items = [];
+    for (let offset = 0; ; offset += pageSize) {
+        const separator = path.includes('?') ? '&' : '?';
+        const page = await api(`${path}${separator}limit=${pageSize}&offset=${offset}`);
+        if (!Array.isArray(page)) throw new ApiError('分页接口返回格式无效', 0, page);
+        items.push(...page);
+        if (page.length < pageSize) return items;
+    }
 }
 
 /* ----------------------------- 电子签名 ----------------------------- */
@@ -319,6 +332,27 @@ function boolBadge(v, yes = '是', no = '否') {
     return v ? badge(yes, 'success') : badge(no, 'gray');
 }
 
+/* ----------------------------- 岗位感知 ----------------------------- */
+const PAGE_ROLE_ACCESS = {
+    'users.html': ['QUALITY_MANAGER'],
+    'environment.html': ['ENVIRONMENT_MONITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
+    'audit.html': ['AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
+    'operations.html': ['IT_ADMIN', 'AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
+};
+async function loadCurrentGspRoles() {
+    const data = await api('/gsp/roles/me');
+    currentGspRoles = new Set(data?.roles || []);
+}
+function hasAnyGspRole(...roles) {
+    const legacyRole = String(currentUser?.role?.value || currentUser?.role || '').toLowerCase();
+    if (legacyRole === 'admin') return true;
+    if (!roles.length) return currentGspRoles.size > 0;
+    return roles.some(role => currentGspRoles.has(role));
+}
+function canAccessPage(page) {
+    return hasAnyGspRole(...(PAGE_ROLE_ACCESS[page] || []));
+}
+
 /* ----------------------------- 布局 ----------------------------- */
 const NAV_GROUPS = [
     { title: '总览', items: [
@@ -358,7 +392,7 @@ function renderShell(activePage, pageTitle) {
     const sidebar = NAV_GROUPS.map(g => `
         <div class="nav-group">
             <div class="nav-group-title">${esc(g.title)}</div>
-            ${g.items.map(it => `
+            ${g.items.filter(it => canAccessPage(it.page)).map(it => `
                 <a href="${it.page}" class="nav-item ${activePage === it.page ? 'active' : ''}" data-route="${it.page}">
                     <i class="fa ${it.icon}"></i><span>${esc(it.label)}</span>
                 </a>`).join('')}
@@ -437,22 +471,22 @@ async function refPartners(force) {
 }
 async function refProfiles(force) {
     if (!force && refCache.profiles) return refCache.profiles;
-    refCache.profiles = await api('/gsp/products');
+    refCache.profiles = await apiAll('/gsp/products');
     return refCache.profiles;
 }
 async function refBatches(force) {
     if (!force && refCache.batches) return refCache.batches;
-    refCache.batches = await api('/gsp/batches');
+    refCache.batches = await apiAll('/gsp/batches');
     return refCache.batches;
 }
 async function refBatchStock(force) {
     if (!force && refCache.batchStock) return refCache.batchStock;
-    refCache.batchStock = await api('/gsp/batch-stock');
+    refCache.batchStock = await apiAll('/gsp/batch-stock');
     return refCache.batchStock;
 }
 async function refHolds(force) {
     if (!force && refCache.holds) return refCache.holds;
-    refCache.holds = await api('/gsp/quality-holds');
+    refCache.holds = await apiAll('/gsp/quality-holds');
     return refCache.holds;
 }
 async function refCarriers(force) {
@@ -480,7 +514,18 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
     const page = (window.location.pathname.split('/').pop() || 'index.html');
     if (page === 'index.html') { window.location.href = 'dashboard.html'; return; }
+    try {
+        await loadCurrentGspRoles();
+    } catch (e) {
+        showToast(e.message || '当前岗位加载失败', 'error');
+        return;
+    }
     renderShell(page, window.PAGE_TITLE || '');
+    if (!canAccessPage(page)) {
+        const pageContent = document.getElementById('pageContent');
+        if (pageContent) pageContent.innerHTML = '<div class="alert alert-error"><i class="fa fa-lock mr-2"></i>当前账号没有访问该 GSP 模块的有效岗位。</div>';
+        return;
+    }
     if (typeof window.pageInit === 'function') {
         try { await window.pageInit(); } catch (e) {
             console.error('pageInit error:', e);
