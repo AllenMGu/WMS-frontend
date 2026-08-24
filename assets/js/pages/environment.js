@@ -193,7 +193,7 @@ async function renderAssignments(box) {
                             <td>${statusBadge(a.status)}</td>
                             <td class="actions">
                                 ${a.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="decideAssignment(${a.id})"><i class="fa fa-gavel"></i> 审批</button>` : ''}
-                                ${a.status === 'ACTIVE' ? `<button class="btn btn-link btn-sm" onclick="addReading(${a.id})"><i class="fa fa-plus-circle"></i> 录入读数</button><button class="btn btn-link btn-sm" onclick="viewReadings(${a.id})"><i class="fa fa-table"></i> 读数</button><button class="btn btn-link btn-sm" onclick="closeAssignment(${a.id})"><i class="fa fa-times"></i> 关闭</button>` : ''}
+                                ${a.status === 'ACTIVE' ? `<button class="btn btn-link btn-sm" onclick="addReading(${a.id})"><i class="fa fa-plus-circle"></i> 录入读数</button><button class="btn btn-link btn-sm" onclick="viewReadings(${a.id})"><i class="fa fa-table"></i> 读数</button><button class="btn btn-link btn-sm" onclick="verifyReadingChain(${a.id})"><i class="fa fa-link"></i> 核验链</button><button class="btn btn-link btn-sm" onclick="closeAssignment(${a.id})"><i class="fa fa-times"></i> 关闭</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无监测点位</div></td></tr>'}</tbody>
                 </table>
@@ -307,7 +307,16 @@ function addReading(assignmentId) {
 }
 async function viewReadings(assignmentId) {
     let readings = [];
-    try { readings = await api(`/gsp/environment/assignments/${assignmentId}/readings`); } catch (e) { readings = []; }
+    try {
+        readings = await api(`/gsp/environment/assignments/${assignmentId}/readings`);
+    } catch (e) {
+        openModal({
+            title: '监测读数记录',
+            size: 'sm',
+            body: `<div class="alert alert-error"><i class="fa fa-exclamation-circle mr-2"></i>读数加载失败：${esc(e.message)}</div>`,
+        });
+        return;
+    }
     openModal({
         title: `监测读数记录（${readings.length} 条）`, size: 'lg',
         body: `
@@ -317,6 +326,26 @@ async function viewReadings(assignmentId) {
             </table></div>`,
     });
 }
+
+async function verifyReadingChain(assignmentId) {
+    try {
+        const result = await api(`/gsp/environment/assignments/${assignmentId}/verify-chain`);
+        openModal({
+            title: '监测读数链核验结果',
+            size: 'sm',
+            body: result.valid
+                ? '<div class="alert alert-success"><i class="fa fa-check-circle mr-2"></i>读数链完整，未发现篡改或断链。</div>'
+                : `<div class="alert alert-error"><i class="fa fa-exclamation-triangle mr-2"></i>读数链核验失败，异常读数 ID：${esc(result.broken_reading_id ?? '未知')}</div>`,
+        });
+    } catch (e) {
+        openModal({
+            title: '监测读数链核验结果',
+            size: 'sm',
+            body: `<div class="alert alert-error"><i class="fa fa-exclamation-circle mr-2"></i>核验请求失败：${esc(e.message)}</div>`,
+        });
+    }
+}
+
 function closeAssignment(id) {
     const modal = openModal({
         title: '关闭监测点位', size: 'sm',
