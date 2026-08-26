@@ -1,13 +1,16 @@
-/* 召回与演练：批次召回（启动→通知→进展→关闭→完成报告）、召回演练（启动→目标核验→完成） */
-'use strict';
-window.PAGE_TITLE = '召回与演练';
-const content = () => document.getElementById('pageContent');
-let tab = 'recalls';
+/* 召回与演练：批次召回（启动→通知→进展→关闭→完成报告）、召回演练（启动→目标核验→完成）
+ * SPA 模块：window.PAGES['recalls'] = { title, icon, desc, init, fn } */
+(function () {
+    'use strict';
+    window.PAGE_TITLE = '召回与演练';
+    let _el = null;
+    const content = () => _el;
+    let tab = 'recalls';
 let recalls = [];
 let drills = [];
 let batches = [];
 
-window.pageInit = async function () {
+async function pageInit(el) { _el = el || document.getElementById('pageContent');
     try { batches = await refBatches(true); } catch (e) { batches = []; }
     render();
     await loadTab();
@@ -58,10 +61,10 @@ async function renderRecalls(box) {
                             <td style="white-space:normal">${(r.batches || []).map(b => `<span class="text-xs text-gray-600">批次#${b.batch_id}（收${fmtNum(b.target_shipped_quantity)}/回${fmtNum(b.recovered_quantity)}）</span><br>`).join('')}</td>
                             <td>${(r.targets || []).length}</td>
                             <td class="actions">
-                                ${r.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="activateRecall(${r.id})"><i class="fa fa-play"></i> 启动</button>` : ''}
-                                ${['DRAFT', 'ACTIVE'].includes(r.status) ? `<button class="btn btn-link btn-sm" onclick="progressRecall(${r.id})"><i class="fa fa-file-text-o"></i> 进展报告</button>` : ''}
-                                ${r.status === 'ACTIVE' ? `<button class="btn btn-link btn-sm" onclick="viewRecall(${r.id})"><i class="fa fa-bell"></i> 通知目标</button><button class="btn btn-link btn-sm" onclick="closeRecall(${r.id})"><i class="fa fa-check"></i> 关闭</button>` : ''}
-                                ${r.status === 'CLOSED' && !r.completion_report ? `<button class="btn btn-link btn-sm" onclick="completionReport(${r.id})"><i class="fa fa-file-text"></i> 完成报告</button>` : ''}
+                                ${r.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('recalls').activateRecall(${r.id})"><i class="fa fa-play"></i> 启动</button>` : ''}
+                                ${['DRAFT', 'ACTIVE'].includes(r.status) ? `<button class="btn btn-link btn-sm" onclick="PG('recalls').progressRecall(${r.id})"><i class="fa fa-file-text-o"></i> 进展报告</button>` : ''}
+                                ${r.status === 'ACTIVE' ? `<button class="btn btn-link btn-sm" onclick="PG('recalls').viewRecall(${r.id})"><i class="fa fa-bell"></i> 通知目标</button><button class="btn btn-link btn-sm" onclick="PG('recalls').closeRecall(${r.id})"><i class="fa fa-check"></i> 关闭</button>` : ''}
+                                ${r.status === 'CLOSED' && !r.completion_report ? `<button class="btn btn-link btn-sm" onclick="PG('recalls').completionReport(${r.id})"><i class="fa fa-file-text"></i> 完成报告</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="10"><div class="empty-state">暂无召回记录</div></td></tr>'}</tbody>
                 </table>
@@ -162,7 +165,7 @@ function viewRecall(id) {
                             <td>${fmtNum(t.recovered_quantity)}</td>
                             <td>${statusBadge(t.notification_status)}</td>
                             <td class="actions">
-                                <button class="btn btn-link btn-sm" onclick="notifyTarget(${id}, ${t.id})"><i class="fa fa-bell"></i> 记录通知</button>
+                                <button class="btn btn-link btn-sm" onclick="PG('recalls').notifyTarget(${id}, ${t.id})"><i class="fa fa-bell"></i> 记录通知</button>
                             </td>
                         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无目标，启动召回后自动识别受影响发运批次</div></td></tr>'}</tbody>
                 </table>
@@ -240,23 +243,12 @@ function completionReport(id) {
             reason: modal.querySelector('#crReason').value.trim(),
         };
         if (!body.report_ref || body.treatment_summary.length < 10 || body.effectiveness_evaluation.length < 10 || !body.regulatory_submission_ref || body.reason.length < 3) { showToast('请完整填写完成报告', 'warning'); return; }
-        signAction(
-            {
-                action: 'RECALL_COMPLETION_REPORT',
-                entity_type: 'GspRecall',
-                entity_id: id,
-                meaning: 'RESPONSIBILITY',
-            },
-            {
-                path: `/gsp/recalls/${id}/completion-report`,
-                opts: { method: 'POST', body },
-                onSuccess: async () => {
-                    closeModal(modal);
-                    await loadTab();
-                },
-            },
-            '提交召回完成报告'
-        );
+        try {
+            await api(`/gsp/recalls/${id}/completion-report`, { method: 'POST', body });
+            closeModal(modal);
+            showToast('完成报告已提交', 'success');
+            await loadTab();
+        } catch (e) { showToast(e.message, 'error'); }
     });
 }
 
@@ -281,8 +273,8 @@ async function renderDrills(box) {
                             <td>${(d.targets || []).length}</td>
                             <td>${d.result ? badge(d.result, d.result === 'PASS' ? 'success' : 'danger') : '-'}</td>
                             <td class="actions">
-                                ${d.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="activateDrill(${d.id})"><i class="fa fa-play"></i> 启动</button>` : ''}
-                                ${d.status === 'ACTIVATED' ? `<button class="btn btn-link btn-sm" onclick="viewDrill(${d.id})"><i class="fa fa-search"></i> 核验目标</button><button class="btn btn-link btn-sm" onclick="completeDrill(${d.id})"><i class="fa fa-check"></i> 完成</button>` : ''}
+                                ${d.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('recalls').activateDrill(${d.id})"><i class="fa fa-play"></i> 启动</button>` : ''}
+                                ${d.status === 'ACTIVATED' ? `<button class="btn btn-link btn-sm" onclick="PG('recalls').viewDrill(${d.id})"><i class="fa fa-search"></i> 核验目标</button><button class="btn btn-link btn-sm" onclick="PG('recalls').completeDrill(${d.id})"><i class="fa fa-check"></i> 完成</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无召回演练</div></td></tr>'}</tbody>
                 </table>
@@ -355,7 +347,7 @@ function viewDrill(id) {
                             <td>${fmtNum(t.shipped_quantity)}</td>
                             <td>${statusBadge(t.verification_status)}</td>
                             <td class="actions">
-                                <button class="btn btn-link btn-sm" onclick="verifyDrillTarget(${id}, ${t.id})"><i class="fa fa-check-circle"></i> 核验</button>
+                                <button class="btn btn-link btn-sm" onclick="PG('recalls').verifyDrillTarget(${id}, ${t.id})"><i class="fa fa-check-circle"></i> 核验</button>
                             </td>
                         </tr>`).join('') || '<tr><td colspan="6"><div class="empty-state">暂无目标</div></td></tr>'}</tbody>
                 </table>
@@ -418,3 +410,14 @@ function completeDrill(id) {
         );
     });
 }
+
+    window.PAGES = window.PAGES || {};
+    window.PAGES['recalls'] = {
+        title: '召回与演练',
+        icon: 'fa-bullhorn',
+        desc: '召回执行、进度与演练',
+        init: pageInit,
+        fn: { activateRecall, activateDrill, notifyTarget, progressRecall, closeRecall, completionReport, viewRecall, viewDrill, verifyDrillTarget, completeDrill },
+    };
+    window.pageInit = pageInit; // 兼容直接访问旧页面 recalls.html
+})();

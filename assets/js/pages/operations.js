@@ -1,13 +1,16 @@
-/* 运维合规：秘密轮换（申请→批准→实施→核验）、备份证据（登记→复核）、恢复演练（申请→批准→执行→核验） */
-'use strict';
-window.PAGE_TITLE = '运维合规';
-const content = () => document.getElementById('pageContent');
-let tab = 'rotations';
+/* 运维合规：秘密轮换（申请→批准→实施→核验）、备份证据（登记→复核）、恢复演练（申请→批准→执行→核验）
+ * SPA 模块：window.PAGES['operations'] = { title, icon, desc, init, fn } */
+(function () {
+    'use strict';
+    window.PAGE_TITLE = '运维合规';
+    let _el = null;
+    const content = () => _el;
+    let tab = 'rotations';
 let rotations = [];
 let backups = [];
 let drills = [];
 
-window.pageInit = async function () {
+async function pageInit(el) { _el = el || document.getElementById('pageContent');
     render();
     await loadTab();
 };
@@ -58,9 +61,9 @@ async function renderRotations(box) {
                             <td>${fmtDT(r.next_rotation_due_at)}</td>
                             <td>${statusBadge(r.status)}</td>
                             <td class="actions">
-                                ${r.status === 'REQUESTED' ? `<button class="btn btn-link btn-sm" onclick="decideRotation(${r.id}, 'SECRET_ROTATION_DECISION', 'GspSecretRotation', '/gsp/operations/secret-rotations/' + ${r.id} + '/decision')"><i class="fa fa-gavel"></i> 批准</button>` : ''}
-                                ${r.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="implementRotation(${r.id})"><i class="fa fa-wrench"></i> 实施</button>` : ''}
-                                ${r.status === 'IMPLEMENTED' ? `<button class="btn btn-link btn-sm" onclick="verifyRotation(${r.id})"><i class="fa fa-check-circle"></i> 核验</button>` : ''}
+                                ${r.status === 'REQUESTED' ? `<button class="btn btn-link btn-sm" onclick="PG('operations').decideRotation(${r.id}, 'SECRET_ROTATION_DECISION', 'GspSecretRotation', '/gsp/operations/secret-rotations/' + ${r.id} + '/decision')"><i class="fa fa-gavel"></i> 批准</button>` : ''}
+                                ${r.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="PG('operations').implementRotation(${r.id})"><i class="fa fa-wrench"></i> 实施</button>` : ''}
+                                ${r.status === 'IMPLEMENTED' ? `<button class="btn btn-link btn-sm" onclick="PG('operations').verifyRotation(${r.id})"><i class="fa fa-check-circle"></i> 核验</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无轮换申请</div></td></tr>'}</tbody>
                 </table>
@@ -175,7 +178,7 @@ async function renderBackups(box) {
                             <td class="text-xs">${esc((b.checksum_sha256 || '').slice(0, 12))}…</td>
                             <td>${b.review_result ? badge(b.review_result, b.review_result === 'ACCEPTED' ? 'success' : 'danger') : badge('待复核', 'warning')}</td>
                             <td class="actions">
-                                ${!b.review_result ? `<button class="btn btn-link btn-sm" onclick="reviewBackup(${b.id})"><i class="fa fa-check-circle"></i> 复核</button>` : ''}
+                                ${!b.review_result ? `<button class="btn btn-link btn-sm" onclick="PG('operations').reviewBackup(${b.id})"><i class="fa fa-check-circle"></i> 复核</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="9"><div class="empty-state">暂无备份证据</div></td></tr>'}</tbody>
                 </table>
@@ -277,9 +280,9 @@ async function renderDrills(box) {
                             <td>${d.result ? badge(d.result, d.result === 'PASS' ? 'success' : 'danger') : '-'}</td>
                             <td>${statusBadge(d.status)}</td>
                             <td class="actions">
-                                ${d.status === 'REQUESTED' ? `<button class="btn btn-link btn-sm" onclick="drillDecision(${d.id})"><i class="fa fa-gavel"></i> 批准</button>` : ''}
-                                ${d.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="drillExecute(${d.id})"><i class="fa fa-play"></i> 执行</button>` : ''}
-                                ${d.status === 'EXECUTED' ? `<button class="btn btn-link btn-sm" onclick="drillVerify(${d.id})"><i class="fa fa-check-circle"></i> 核验</button>` : ''}
+                                ${d.status === 'REQUESTED' ? `<button class="btn btn-link btn-sm" onclick="PG('operations').drillDecision(${d.id})"><i class="fa fa-gavel"></i> 批准</button>` : ''}
+                                ${d.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="PG('operations').drillExecute(${d.id})"><i class="fa fa-play"></i> 执行</button>` : ''}
+                                ${d.status === 'EXECUTED' ? `<button class="btn btn-link btn-sm" onclick="PG('operations').drillVerify(${d.id})"><i class="fa fa-check-circle"></i> 核验</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无恢复演练</div></td></tr>'}</tbody>
                 </table>
@@ -387,3 +390,14 @@ function drillVerify(id) {
             { path: `/gsp/operations/recovery-drills/${id}/verify`, opts: { method: 'POST', body } }, '核验恢复演练');
     });
 }
+
+    window.PAGES = window.PAGES || {};
+    window.PAGES['operations'] = {
+        title: '运维合规',
+        icon: 'fa-gears',
+        desc: '备份、恢复演练、秘密轮换',
+        init: pageInit,
+        fn: { decideRotation, implementRotation, verifyRotation, reviewBackup, drillDecision, drillExecute, drillVerify },
+    };
+    window.pageInit = pageInit; // 兼容直接访问旧页面 operations.html
+})();

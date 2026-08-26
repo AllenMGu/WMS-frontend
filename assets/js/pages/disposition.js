@@ -1,15 +1,18 @@
-/* 不合格品与购进退出：登记→独立处置批准→监督销毁/退供→购进退出闭环 */
-'use strict';
-window.PAGE_TITLE = '不合格品处置';
-const content = () => document.getElementById('pageContent');
-let tab = 'nc';
+/* 不合格品与购进退出：登记→独立处置批准→监督销毁/退供→购进退出闭环
+ * SPA 模块：window.PAGES['disposition'] = { title, icon, desc, init, fn } */
+(function () {
+    'use strict';
+    window.PAGE_TITLE = '不合格品处置';
+    let _el = null;
+    const content = () => _el;
+    let tab = 'nc';
 let records = [];
 let returns = [];
 let batchStock = [];
 let users = [];
 
-window.pageInit = async function () {
-    await Promise.all([refBatchStock(true), refUsers()]).then(([s, u]) => { batchStock = s; users = u; });
+async function pageInit(el) { _el = el || document.getElementById('pageContent');
+    await Promise.all([refBatchStock(true), refUsers()]).then(([s, u]) => { batchStock = s; users = u; }).catch(() => {});
     render();
     await loadTab();
 };
@@ -60,8 +63,8 @@ async function renderNC(box) {
                             <td>${esc(r.approved_disposition || '-')}</td>
                             <td>${statusBadge(r.status)}</td>
                             <td class="actions">
-                                ${r.status === 'PENDING_APPROVAL' ? `<button class="btn btn-link btn-sm" onclick="approveNC(${r.id})"><i class="fa fa-gavel"></i> 批准处置</button>` : ''}
-                                ${r.status === 'APPROVED' && r.approved_disposition === 'DESTROY' ? `<button class="btn btn-link btn-sm" onclick="destroyNC(${r.id})"><i class="fa fa-fire"></i> 监督销毁</button>` : ''}
+                                ${r.status === 'PENDING_APPROVAL' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').approveNC(${r.id})"><i class="fa fa-gavel"></i> 批准处置</button>` : ''}
+                                ${r.status === 'APPROVED' && r.approved_disposition === 'DESTROY' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').destroyNC(${r.id})"><i class="fa fa-fire"></i> 监督销毁</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="10"><div class="empty-state">暂无不合格品记录</div></td></tr>'}</tbody>
                 </table>
@@ -183,9 +186,9 @@ async function renderReturns(box) {
                             <td>${esc(r.outbound_document_no || '-')}</td>
                             <td>${esc(r.carrier_name || '-')}</td>
                             <td class="actions">
-                                ${r.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="submitPR(${r.id})"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
-                                ${r.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="approvePR(${r.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
-                                ${r.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="dispatchPR(${r.id})"><i class="fa fa-truck"></i> 退供发运</button>` : ''}
+                                ${r.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').submitPR(${r.id})"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
+                                ${r.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').approvePR(${r.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
+                                ${r.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').dispatchPR(${r.id})"><i class="fa fa-truck"></i> 退供发运</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无购进退出</div></td></tr>'}</tbody>
                 </table>
@@ -261,3 +264,14 @@ function dispatchPR(id) {
         );
     });
 }
+
+    window.PAGES = window.PAGES || {};
+    window.PAGES['disposition'] = {
+        title: '不合格品处置',
+        icon: 'fa-exclamation-triangle',
+        desc: '不合格品登记、批准与处置',
+        init: pageInit,
+        fn: { approveNC, destroyNC, submitPR, approvePR, dispatchPR },
+    };
+    window.pageInit = pageInit; // 兼容直接访问旧页面 disposition.html
+})();

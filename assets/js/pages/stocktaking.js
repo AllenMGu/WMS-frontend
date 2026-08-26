@@ -1,13 +1,16 @@
-/* 批号库存盘点：盲盘计划（制定→提交→批准→实盘→差异复核→受控调整） */
-'use strict';
-window.PAGE_TITLE = '批号库存盘点';
-const content = () => document.getElementById('pageContent');
+/* 批号库存盘点：盲盘计划（制定→提交→批准→实盘→差异复核→受控调整）
+ * SPA 模块：window.PAGES['stocktaking'] = { title, icon, desc, init, fn } */
+(function () {
+    'use strict';
+    window.PAGE_TITLE = '批号库存盘点';
+    let _el = null;
+    const content = () => _el;
 let plans = [];
 let batchStock = [];
 let warehouses = [];
 
-window.pageInit = async function () {
-    await Promise.all([refWarehouses(), refBatchStock(true)]).then(([w, s]) => { warehouses = w; batchStock = s; });
+async function pageInit(el) { _el = el || document.getElementById('pageContent');
+    await Promise.all([refWarehouses(), refBatchStock(true)]).then(([w, s]) => { warehouses = w; batchStock = s; }).catch(() => {});
     render();
     await load();
 };
@@ -46,11 +49,11 @@ function renderTable() {
             <td style="white-space:normal;max-width:260px">${esc(p.scope_summary)}</td>
             <td>${statusBadge(p.status)}</td>
             <td class="actions">
-                ${p.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="submitPlan(${p.id})"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
-                ${p.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="approvePlan(${p.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
-                ${['APPROVED', 'REVIEWED'].includes(p.status) ? `<button class="btn btn-link btn-sm" onclick="viewPlan(${p.id})"><i class="fa fa-eye"></i> 查看/实盘</button>` : ''}
-                ${['APPROVED', 'REVIEWED'].includes(p.status) ? `<button class="btn btn-link btn-sm" onclick="reviewPlan(${p.id})"><i class="fa fa-balance-scale"></i> 差异复核</button>` : ''}
-                ${p.status === 'REVIEWED' ? `<button class="btn btn-link btn-sm" onclick="applyAdjust(${p.id})"><i class="fa fa-wrench"></i> 执行调整</button>` : ''}
+                ${p.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('stocktaking').submitPlan(${p.id})"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
+                ${p.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="PG('stocktaking').approvePlan(${p.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
+                ${['APPROVED', 'REVIEWED'].includes(p.status) ? `<button class="btn btn-link btn-sm" onclick="PG('stocktaking').viewPlan(${p.id})"><i class="fa fa-eye"></i> 查看/实盘</button>` : ''}
+                ${['APPROVED', 'REVIEWED'].includes(p.status) ? `<button class="btn btn-link btn-sm" onclick="PG('stocktaking').reviewPlan(${p.id})"><i class="fa fa-balance-scale"></i> 差异复核</button>` : ''}
+                ${p.status === 'REVIEWED' ? `<button class="btn btn-link btn-sm" onclick="PG('stocktaking').applyAdjust(${p.id})"><i class="fa fa-wrench"></i> 执行调整</button>` : ''}
             </td>
         </tr>`).join('') || '<tr><td colspan="6"><div class="empty-state">暂无盘点计划</div></td></tr>';
 }
@@ -137,7 +140,7 @@ function viewPlan(planId) {
                             <td>${i.count_round}</td>
                             <td>${statusBadge(i.status)}</td>
                             <td class="actions">
-                                ${['APPROVED', 'REVIEWED'].includes(p.status) && i.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="countItem(${planId}, ${i.id}, ${i.count_round})"><i class="fa fa-pencil"></i> 实盘</button>` : ''}
+                                ${['APPROVED', 'REVIEWED'].includes(p.status) && i.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('stocktaking').countItem(${planId}, ${i.id}, ${i.count_round})"><i class="fa fa-pencil"></i> 实盘</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="11"><div class="empty-state">无明细</div></td></tr>'}</tbody>
                 </table>
@@ -202,3 +205,15 @@ function applyAdjust(id) {
         );
     }, '继续');
 }
+
+
+    window.PAGES = window.PAGES || {};
+    window.PAGES['stocktaking'] = {
+        title: '批号库存盘点',
+        icon: 'fa-list-alt',
+        desc: '批号库存盘点与差异处理',
+        init: pageInit,
+        fn: { submitPlan, approvePlan, countItem, reviewPlan, viewPlan, applyAdjust },
+    };
+    window.pageInit = pageInit; // 兼容直接访问旧页面 stocktaking.html
+})();
