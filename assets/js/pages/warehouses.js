@@ -122,6 +122,7 @@
             <div class="form-group"><label class="form-label">仓库名称 *</label><input id="whName" class="input-field" value="${esc(editing?.name || '')}" placeholder="如 总部常温库"></div>
             <div class="form-group"><label class="form-label">地址</label><input id="whAddr" class="input-field" value="${esc(editing?.address || '')}" placeholder="仓库地址"></div>
             ${editing ? `<div class="form-group"><label class="form-label">状态</label><select id="whActive" class="input-field">${optionHTML([{ v: true, l: '启用' }, { v: false, l: '停用' }], 'v', 'l')}</select></div>` : ''}`,
+            <div class="form-group"><label class="form-label">变更原因 *（≥3字）</label><textarea id="whReason" class="input-field" rows="2" placeholder="请输入批准依据或变更原因"></textarea></div>
             footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="whSubmit">${editing ? '保存' : '新增'}</button>`,
         });
         if (editing) modal.querySelector('#whActive').value = String(editing.is_active !== false);
@@ -129,16 +130,18 @@
             const code = modal.querySelector('#whCode').value.trim();
             const name = modal.querySelector('#whName').value.trim();
             const address = modal.querySelector('#whAddr').value.trim();
+            const reason = modal.querySelector('#whReason').value.trim();
             if (!code || !name) { showToast('编码和名称必填', 'warning'); return; }
+            if (reason.length < 3) { showToast('变更原因不能少于3个字', 'warning'); return; }
             try {
                 if (editing) {
                     const body = { code, name, address };
                     if (editing.is_active !== false !== (modal.querySelector('#whActive').value === 'true')) {
                         body.is_active = modal.querySelector('#whActive').value === 'true';
                     }
-                    await api(`/warehouses/${editing.id}`, { method: 'PUT', body });
+                    await api(withReason(`/warehouses/${editing.id}`, reason), { method: 'PUT', body });
                 } else {
-                    await api('/warehouses/', { method: 'POST', body: { code, name, address } });
+                    await api(withReason('/warehouses/', reason), { method: 'POST', body: { code, name, address } });
                 }
                 closeModal(modal); showToast('仓库已保存', 'success'); await load();
             } catch (e) { showToast(e.message, 'error'); }
@@ -146,17 +149,33 @@
     }
 
     function toggleWarehouse(id) {
-        const w = warehouses.find(x => x.id === id);
-        if (!w) return;
-        const active = w.is_active !== false;
-        confirmModal(`确定${active ? '停用' : '启用'}仓库「${w.code} ${w.name}」吗？${active ? '停用后该仓库将不再出现在可选列表中。' : ''}`, async () => {
+        const warehouse = warehouses.find(item => item.id === id);
+        if (!warehouse) return;
+        const active = warehouse.is_active !== false;
+        const modal = openModal({
+            title: active ? '停用仓库' : '启用仓库',
+            size: 'sm',
+            body: `
+            <div class="alert alert-warning mb-3"><i class="fa fa-exclamation-triangle mr-2"></i>
+                确定${active ? '停用' : '启用'}仓库「${esc(warehouse.code)} ${esc(warehouse.name)}」吗？
+            </div>
+            <div class="form-group"><label class="form-label">变更原因 *（≥3字）</label><textarea id="twReason" class="input-field" rows="2"></textarea></div>`,
+            footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="twSubmit">${active ? '停用' : '启用'}</button>`,
+        });
+        modal.querySelector('#twSubmit').addEventListener('click', async () => {
+            const reason = modal.querySelector('#twReason').value.trim();
+            if (reason.length < 3) { showToast('变更原因不能少于3个字', 'warning'); return; }
             try {
-                await api(`/warehouses/${id}`, { method: 'PUT', body: { is_active: !active } });
-                showToast('仓库状态已更新', 'success'); await load();
+                await api(withReason(`/warehouses/${id}`, reason), {
+                    method: 'PUT',
+                    body: { is_active: !active },
+                });
+                closeModal(modal);
+                showToast('仓库状态已更新', 'success');
+                await load();
             } catch (e) { showToast(e.message, 'error'); }
-        }, active ? '停用' : '启用');
+        });
     }
-
     /* ------------------- 库位 ------------------- */
     function openLocationModal(id) {
         if (!selectedWarehouseId && !id) { showToast('请先选择仓库', 'warning'); return; }
@@ -171,6 +190,7 @@
             <div class="form-group"><label class="form-label">库位编码 *</label><input id="locCode" class="input-field" value="${esc(editing?.location_code || '')}" placeholder="如 A-01-01"></div>
             <div class="form-group"><label class="form-label">库位名称 *</label><input id="locName" class="input-field" value="${esc(editing?.name || '')}" placeholder="如 常温区A排1列"></div>
             ${editing ? `<div class="form-group"><label class="form-label">状态</label><select id="locActive" class="input-field">${optionHTML([{ v: true, l: '启用' }, { v: false, l: '停用' }], 'v', 'l')}</select></div>` : ''}`,
+            <div class="form-group"><label class="form-label">变更原因 *（≥3字）</label><textarea id="locReason" class="input-field" rows="2" placeholder="请输入批准依据或变更原因"></textarea></div>
             footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="locSubmit">${editing ? '保存' : '新增'}</button>`,
         });
         modal.querySelector('#locWh').value = String(editing ? editing.warehouse_id : selectedWarehouseId);
@@ -179,16 +199,18 @@
             const warehouse_id = Number(modal.querySelector('#locWh').value);
             const location_code = modal.querySelector('#locCode').value.trim();
             const name = modal.querySelector('#locName').value.trim();
+            const reason = modal.querySelector('#locReason').value.trim();
             if (!warehouse_id || !location_code || !name) { showToast('请选择仓库并填写编码和名称', 'warning'); return; }
+            if (reason.length < 3) { showToast('变更原因不能少于3个字', 'warning'); return; }
             try {
                 if (editing) {
                     const body = { location_code, name };
                     if (editing.is_active !== false !== (modal.querySelector('#locActive').value === 'true')) {
                         body.is_active = modal.querySelector('#locActive').value === 'true';
                     }
-                    await api(`/locations/${editing.id}`, { method: 'PUT', body });
+                    await api(withReason(`/locations/${editing.id}`, reason), { method: 'PUT', body });
                 } else {
-                    await api('/locations/', { method: 'POST', body: { warehouse_id, location_code, name } });
+                    await api(withReason('/locations/', reason), { method: 'POST', body: { warehouse_id, location_code, name } });
                 }
                 closeModal(modal); showToast('库位已保存', 'success'); await load();
             } catch (e) { showToast(e.message, 'error'); }
@@ -196,16 +218,29 @@
     }
 
     function deleteLocation(id) {
-        const loc = locations.find(l => l.id === id);
-        if (!loc) return;
-        confirmModal(`确定删除库位「${loc.location_code} ${loc.name}」吗？删除后不可恢复。`, async () => {
+        const location = locations.find(item => item.id === id);
+        if (!location) return;
+        const modal = openModal({
+            title: '删除库位',
+            size: 'sm',
+            body: `
+            <div class="alert alert-warning mb-3"><i class="fa fa-exclamation-triangle mr-2"></i>
+                删除库位「${esc(location.location_code)} ${esc(location.name)}」后不可恢复；存在业务引用时后端会拒绝删除。
+            </div>
+            <div class="form-group"><label class="form-label">删除原因 *（≥3字）</label><textarea id="dlReason" class="input-field" rows="2"></textarea></div>`,
+            footer: '<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-danger" id="dlSubmit">删除</button>',
+        });
+        modal.querySelector('#dlSubmit').addEventListener('click', async () => {
+            const reason = modal.querySelector('#dlReason').value.trim();
+            if (reason.length < 3) { showToast('删除原因不能少于3个字', 'warning'); return; }
             try {
-                await api(`/locations/${id}`, { method: 'DELETE' });
-                showToast('库位已删除', 'success'); await load();
+                await api(withReason(`/locations/${id}`, reason), { method: 'DELETE' });
+                closeModal(modal);
+                showToast('库位已删除', 'success');
+                await load();
             } catch (e) { showToast(e.message, 'error'); }
-        }, '删除');
+        });
     }
-
     window.PAGES = window.PAGES || {};
     window.PAGES['warehouses'] = {
         title: '仓库与库位',
