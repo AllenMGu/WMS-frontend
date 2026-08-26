@@ -121,8 +121,8 @@
             <div class="form-group"><label class="form-label">仓库编码 *</label><input id="whCode" class="input-field" value="${esc(editing?.code || '')}" placeholder="如 WH-001"></div>
             <div class="form-group"><label class="form-label">仓库名称 *</label><input id="whName" class="input-field" value="${esc(editing?.name || '')}" placeholder="如 总部常温库"></div>
             <div class="form-group"><label class="form-label">地址</label><input id="whAddr" class="input-field" value="${esc(editing?.address || '')}" placeholder="仓库地址"></div>
-            ${editing ? `<div class="form-group"><label class="form-label">状态</label><select id="whActive" class="input-field">${optionHTML([{ v: true, l: '启用' }, { v: false, l: '停用' }], 'v', 'l')}</select></div>` : ''}`,
-            <div class="form-group"><label class="form-label">变更原因 *（≥3字）</label><textarea id="whReason" class="input-field" rows="2" placeholder="请输入批准依据或变更原因"></textarea></div>
+            ${editing ? `<div class="form-group"><label class="form-label">状态</label><select id="whActive" class="input-field">${optionHTML([{ v: true, l: '启用' }, { v: false, l: '停用' }], 'v', 'l')}</select></div>` : ''}
+            <div class="form-group"><label class="form-label">变更原因 *（≥3字）</label><textarea id="whReason" class="input-field" rows="2" placeholder="请输入批准依据或变更原因"></textarea></div>`,
             footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="whSubmit">${editing ? '保存' : '新增'}</button>`,
         });
         if (editing) modal.querySelector('#whActive').value = String(editing.is_active !== false);
