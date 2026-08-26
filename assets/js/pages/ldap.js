@@ -53,13 +53,13 @@
         const mode = cfg.ldap_transport_mode || '未知';
         const modeBadge = mode === 'LDAPS' ? badge('LDAPS（加密）', 'success') : mode === 'STARTTLS' ? badge('STARTTLS（加密）', 'success') : badge(mode, 'danger');
         const items = [
-            ['目录服务器', cfg.ldap_server],
+            ['目录服务器', esc(cfg.ldap_server)],
             ['传输模式', modeBadge],
             ['TLS 证书校验', cfg.ldap_tls_validate ? badge('开启', 'success') : badge('关闭', 'danger')],
             ['允许明文认证（LDAP 389）', cfg.ldap_allow_plaintext_auth ? badge('是（需风险批准）', 'danger') : badge('否', 'success')],
-            ['Base DN', cfg.ldap_base_dn],
-            ['绑定 DN', cfg.ldap_admin_dn || '-'],
-            ['用户搜索过滤器', cfg.ldap_user_search_filter],
+            ['Base DN', esc(cfg.ldap_base_dn)],
+            ['绑定 DN', esc(cfg.ldap_admin_dn || '-')],
+            ['用户搜索过滤器', esc(cfg.ldap_user_search_filter)],
             ['配置来源', cfg.managed_externally ? badge('外部秘密管理（受控变更）', 'info') : badge('未知', 'warning')],
         ];
         body.innerHTML = `
