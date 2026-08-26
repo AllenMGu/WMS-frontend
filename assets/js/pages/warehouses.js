@@ -189,8 +189,8 @@
             </div>
             <div class="form-group"><label class="form-label">库位编码 *</label><input id="locCode" class="input-field" value="${esc(editing?.location_code || '')}" placeholder="如 A-01-01"></div>
             <div class="form-group"><label class="form-label">库位名称 *</label><input id="locName" class="input-field" value="${esc(editing?.name || '')}" placeholder="如 常温区A排1列"></div>
-            ${editing ? `<div class="form-group"><label class="form-label">状态</label><select id="locActive" class="input-field">${optionHTML([{ v: true, l: '启用' }, { v: false, l: '停用' }], 'v', 'l')}</select></div>` : ''}`,
-            <div class="form-group"><label class="form-label">变更原因 *（≥3字）</label><textarea id="locReason" class="input-field" rows="2" placeholder="请输入批准依据或变更原因"></textarea></div>
+            ${editing ? `<div class="form-group"><label class="form-label">状态</label><select id="locActive" class="input-field">${optionHTML([{ v: true, l: '启用' }, { v: false, l: '停用' }], 'v', 'l')}</select></div>` : ''}
+            <div class="form-group"><label class="form-label">变更原因 *（≥3字）</label><textarea id="locReason" class="input-field" rows="2" placeholder="请输入批准依据或变更原因"></textarea></div>`,
             footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="locSubmit">${editing ? '保存' : '新增'}</button>`,
         });
         modal.querySelector('#locWh').value = String(editing ? editing.warehouse_id : selectedWarehouseId);
