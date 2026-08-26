@@ -188,8 +188,8 @@
                 <label class="form-label">勾选该操作员可访问的仓库（取消勾选即解除分配）</label>
                 <div id="awList" class="checkbox-grid">${whCheckboxes(allWh, curIds)}</div>
             </div>
-            <div class="text-xs" style="color:var(--gray-500)">当前默认仓库：${esc(curWh.find(w => w.is_default)?.name || '无')}</div>`,
-            <div class="form-group mt-3"><label class="form-label">权限变更原因 *（≥3字）</label><textarea id="awReason" class="input-field" rows="2"></textarea></div>
+            <div class="text-xs" style="color:var(--gray-500)">当前默认仓库：${esc(curWh.find(w => w.is_default)?.name || '无')}</div>
+            <div class="form-group mt-3"><label class="form-label">权限变更原因 *（≥3字）</label><textarea id="awReason" class="input-field" rows="2"></textarea></div>`,
             footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="awSubmit">保存</button>`,
         });
         modal.querySelector('#awSubmit').addEventListener('click', async () => {
