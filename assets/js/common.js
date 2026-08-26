@@ -4,9 +4,12 @@
  * ========================================================================== */
 'use strict';
 
-const API_BASE_URL = 'api';
+const API_BASE_URL = (window.WMS_CONFIG?.apiBaseUrl || '/api').replace(/\/+$/, '');
 let currentUser = null;
 let currentWarehouse = null;
+let currentGspRoles = new Set();
+let resolveAppShellReady;
+window.appShellReady = new Promise((resolve) => { resolveAppShellReady = resolve; });
 
 /* ----------------------------- 工具函数 ----------------------------- */
 function esc(value) {
@@ -40,7 +43,9 @@ function debounce(fn, wait) {
     return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); };
 }
 function todayISO() {
-    return new Date().toISOString().slice(0, 10);
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 function nowLocalISO() {
     const d = new Date();
@@ -110,7 +115,7 @@ function extractDetailMessage(detail) {
     return JSON.stringify(detail);
 }
 async function api(path, opts = {}) {
-    const { method = 'GET', body = null, sigToken = null, form = false } = opts;
+    const { method = 'GET', body = null, sigToken = null, form = false, logoutOn401 = true } = opts;
     const headers = sigToken ? getAuthHeaders(sigToken) : getAuthHeaders();
     const init = { method, headers };
     if (body !== null) {
@@ -127,10 +132,24 @@ async function api(path, opts = {}) {
     const text = await res.text();
     try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
     if (!res.ok) {
-        if (res.status === 401) { logout(); throw new ApiError('登录已过期，请重新登录', 401, null); }
+        if (res.status === 401 && logoutOn401) { logout(); throw new ApiError('登录已过期，请重新登录', 401, null); }
         throw new ApiError(extractDetailMessage(data), res.status, data);
     }
     return data;
+}
+async function apiAll(path, pageSize = 500) {
+    const items = [];
+    for (let offset = 0; ; offset += pageSize) {
+        const separator = path.includes('?') ? '&' : '?';
+        const page = await api(`${path}${separator}limit=${pageSize}&offset=${offset}`);
+        if (!Array.isArray(page)) throw new ApiError('分页接口返回格式无效', 0, page);
+        items.push(...page);
+        if (page.length < pageSize) return items;
+    }
+}
+function withReason(path, reason) {
+    const separator = path.includes('?') ? '&' : '?';
+    return `${path}${separator}reason=${encodeURIComponent(String(reason || '').trim())}`;
 }
 
 /* ----------------------------- 电子签名 ----------------------------- */
@@ -138,6 +157,7 @@ async function createSignatureChallenge({ action, entity_type, entity_id, meanin
     return api('/gsp/electronic-signatures/challenges', {
         method: 'POST',
         body: { action, entity_type, entity_id, meaning, payload: payload || {}, reason, password },
+        logoutOn401: false,
     });
 }
 async function signAndCall(path, opts, sigSpec, reason, password) {
@@ -210,7 +230,11 @@ function signAction(sigSpec, businessCall, title) {
         }
         const data = await signAndCall(businessCall.path, { ...opts, body }, sigSpec, reason, password);
         showToast('操作成功', 'success');
-        if (businessCall.onSuccess) await businessCall.onSuccess(data);
+        if (businessCall.onSuccess) {
+            await businessCall.onSuccess(data);
+        } else if (typeof window.pageInit === 'function') {
+            await window.pageInit(document.getElementById('pageContent'));
+        }
     });
 }
 
@@ -314,6 +338,28 @@ function boolBadge(v, yes = '是', no = '否') {
     return v ? badge(yes, 'success') : badge(no, 'gray');
 }
 
+/* ----------------------------- 岗位感知 ----------------------------- */
+const PAGE_ROLE_ACCESS = {
+    'users.html': ['QUALITY_MANAGER'],
+    'ldap.html': ['SYSTEM_ADMIN', 'QUALITY_MANAGER'],
+    'environment.html': ['ENVIRONMENT_MONITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
+    'audit.html': ['AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
+    'operations.html': ['SYSTEM_ADMIN', 'AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
+};
+async function loadCurrentGspRoles() {
+    const data = await api('/gsp/roles/me');
+    currentGspRoles = new Set(data?.roles || []);
+}
+function hasAnyGspRole(...roles) {
+    const legacyRole = String(currentUser?.role?.value || currentUser?.role || '').toLowerCase();
+    if (legacyRole === 'admin') return true;
+    return roles.some(role => currentGspRoles.has(role));
+}
+function canAccessPage(page) {
+    const required = PAGE_ROLE_ACCESS[page];
+    return !required || hasAnyGspRole(...required);
+}
+
 /* ----------------------------- 布局 ----------------------------- */
 const NAV_GROUPS = [
     { title: '总览', items: [
@@ -362,14 +408,18 @@ function renderShell(activePage, pageTitle) {
         shell.innerHTML = '<main class="page-content" id="pageContent"></main>';
         return;
     }
-    const sidebar = NAV_GROUPS.map(g => `
+    const sidebar = NAV_GROUPS.map(g => {
+        const visibleItems = g.items.filter(it => canAccessPage(it.page));
+        if (!visibleItems.length) return '';
+        return `
         <div class="nav-group">
             <div class="nav-group-title">${esc(g.title)}</div>
-            ${g.items.map(it => `
+            ${visibleItems.map(it => `
                 <a href="${it.page === 'all' ? 'app.html' : it.page}" class="nav-item ${activePage === it.page ? 'active' : ''}" data-route="${it.page}">
                     <i class="fa ${it.icon}"></i><span>${esc(it.label)}</span>
                 </a>`).join('')}
-        </div>`).join('');
+        </div>`;
+    }).join('');
     const initials = currentUser ? (currentUser.full_name || currentUser.username || 'U').charAt(0).toUpperCase() : 'U';
     const userName = currentUser ? (currentUser.full_name || currentUser.username) : '加载中...';
     shell.innerHTML = `
@@ -444,22 +494,22 @@ async function refPartners(force) {
 }
 async function refProfiles(force) {
     if (!force && refCache.profiles) return refCache.profiles;
-    refCache.profiles = await api('/gsp/products');
+    refCache.profiles = await apiAll('/gsp/products');
     return refCache.profiles;
 }
 async function refBatches(force) {
     if (!force && refCache.batches) return refCache.batches;
-    refCache.batches = await api('/gsp/batches');
+    refCache.batches = await apiAll('/gsp/batches');
     return refCache.batches;
 }
 async function refBatchStock(force) {
     if (!force && refCache.batchStock) return refCache.batchStock;
-    refCache.batchStock = await api('/gsp/batch-stock');
+    refCache.batchStock = await apiAll('/gsp/batch-stock');
     return refCache.batchStock;
 }
 async function refHolds(force) {
     if (!force && refCache.holds) return refCache.holds;
-    refCache.holds = await api('/gsp/quality-holds');
+    refCache.holds = await apiAll('/gsp/quality-holds');
     return refCache.holds;
 }
 async function refCarriers(force) {
@@ -485,15 +535,38 @@ function PG(key) {
 /* ----------------------------- 页面引导 ----------------------------- */
 document.addEventListener('DOMContentLoaded', async function () {
     const auth = getStoredAuth();
-    if (!auth) { window.location.href = 'index.html'; return; }
+    if (!auth) {
+        resolveAppShellReady(false);
+        window.location.href = 'index.html';
+        return;
+    }
     try {
         currentUser = JSON.parse(auth.user);
     } catch (e) {
-        logout(); return;
+        resolveAppShellReady(false);
+        logout();
+        return;
     }
     const page = (window.location.pathname.split('/').pop() || 'index.html');
-    if (page === 'index.html') { window.location.href = 'app.html'; return; }
+    if (page === 'index.html') {
+        resolveAppShellReady(false);
+        window.location.href = 'app.html';
+        return;
+    }
+    try {
+        await loadCurrentGspRoles();
+    } catch (e) {
+        showToast(e.message || '当前岗位加载失败', 'error');
+        resolveAppShellReady(false);
+        return;
+    }
     renderShell(page, window.PAGE_TITLE || '');
+    resolveAppShellReady(true);
+    if (page !== 'app.html' && !canAccessPage(page)) {
+        const pageContent = document.getElementById('pageContent');
+        if (pageContent) pageContent.innerHTML = '<div class="alert alert-error"><i class="fa fa-lock mr-2"></i>当前账号没有访问该 GSP 模块的有效岗位。</div>';
+        return;
+    }
     if (typeof window.pageInit === 'function') {
         try { await window.pageInit(); } catch (e) {
             console.error('pageInit error:', e);
