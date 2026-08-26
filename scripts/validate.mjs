@@ -31,7 +31,6 @@ const requiredFiles = [
   "app.html",
   "assets/js/common.js",
   "assets/js/app.js",
-  "assets/js/utils.js",
   ...modules.map((name) => `assets/js/pages/${name}.js`),
 ];
 
