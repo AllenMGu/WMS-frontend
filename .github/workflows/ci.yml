@@ -1,0 +1,33 @@
+name: Client CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: client-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate static frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate SPA contracts and GSP controls
+        run: node scripts/validate.mjs
+      - name: Check maintained JavaScript syntax
+        run: |
+          node --check config.js
+          node --check assets/js/common.js
+          node --check assets/js/app.js
+          node --check assets/js/utils.js
+          find assets/js/pages -type f -name '*.js' -print0 | xargs -0 -n1 node --check
