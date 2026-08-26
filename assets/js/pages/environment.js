@@ -196,7 +196,7 @@ async function renderAssignments(box) {
                             <td>${statusBadge(a.status)}</td>
                             <td class="actions">
                                 ${a.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('environment').decideAssignment(${a.id})"><i class="fa fa-gavel"></i> 审批</button>` : ''}
-                                ${a.status === 'ACTIVE' ? `<button class="btn btn-link btn-sm" onclick="PG('environment').addReading(${a.id})"><i class="fa fa-plus-circle"></i> 录入读数</button><button class="btn btn-link btn-sm" onclick="PG('environment').viewReadings(${a.id})"><i class="fa fa-table"></i> 读数</button><button class="btn btn-link btn-sm" onclick="PG('environment').closeAssignment(${a.id})"><i class="fa fa-times"></i> 关闭</button>` : ''}
+                                ${a.status === 'ACTIVE' ? `<button class="btn btn-link btn-sm" onclick="PG('environment').addReading(${a.id})"><i class="fa fa-plus-circle"></i> 录入读数</button><button class="btn btn-link btn-sm" onclick="PG('environment').viewReadings(${a.id})"><i class="fa fa-table"></i> 读数</button><button class="btn btn-link btn-sm" onclick="PG('environment').verifyReadingChain(${a.id})"><i class="fa fa-link"></i> 核验链</button><button class="btn btn-link btn-sm" onclick="PG('environment').closeAssignment(${a.id})"><i class="fa fa-times"></i> 关闭</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无监测点位</div></td></tr>'}</tbody>
                 </table>
@@ -310,7 +310,16 @@ function addReading(assignmentId) {
 }
 async function viewReadings(assignmentId) {
     let readings = [];
-    try { readings = await api(`/gsp/environment/assignments/${assignmentId}/readings`); } catch (e) { readings = []; }
+    try {
+        readings = await api(`/gsp/environment/assignments/${assignmentId}/readings`);
+    } catch (e) {
+        openModal({
+            title: '监测读数记录',
+            size: 'sm',
+            body: `<div class="alert alert-error"><i class="fa fa-exclamation-circle mr-2"></i>读数加载失败：${esc(e.message)}</div>`,
+        });
+        return;
+    }
     openModal({
         title: `监测读数记录（${readings.length} 条）`, size: 'lg',
         body: `
@@ -320,6 +329,26 @@ async function viewReadings(assignmentId) {
             </table></div>`,
     });
 }
+
+async function verifyReadingChain(assignmentId) {
+    try {
+        const result = await api(`/gsp/environment/assignments/${assignmentId}/verify-chain`);
+        openModal({
+            title: '监测读数链核验结果',
+            size: 'sm',
+            body: result.valid
+                ? '<div class="alert alert-success"><i class="fa fa-check-circle mr-2"></i>读数链完整，未发现篡改或断链。</div>'
+                : `<div class="alert alert-error"><i class="fa fa-exclamation-triangle mr-2"></i>读数链核验失败，异常读数 ID：${esc(result.broken_reading_id ?? '未知')}</div>`,
+        });
+    } catch (e) {
+        openModal({
+            title: '监测读数链核验结果',
+            size: 'sm',
+            body: `<div class="alert alert-error"><i class="fa fa-exclamation-circle mr-2"></i>核验请求失败：${esc(e.message)}</div>`,
+        });
+    }
+}
+
 function closeAssignment(id) {
     const modal = openModal({
         title: '关闭监测点位', size: 'sm',
@@ -342,6 +371,7 @@ async function renderAlarms(box) {
         <div class="card">
             <div class="card-header">
                 <span class="card-title"><i class="fa fa-bell mr-2" style="color:var(--red-500)"></i>温湿度告警（${open.length} 条未处理）</span>
+                <button class="btn btn-secondary btn-sm" id="scanOfflineBtn"><i class="fa fa-search"></i> 扫描离线点位</button>
             </div>
             <div class="card-body p-0 table-wrap">
                 <table class="data-table">
@@ -363,7 +393,19 @@ async function renderAlarms(box) {
                 </table>
             </div>
         </div>`;
+    box.querySelector('#scanOfflineBtn').addEventListener('click', scanOfflineAssignments);
 }
+
+function scanOfflineAssignments() {
+    confirmModal('扫描全部有效监测点位，并为超时未上报的点位生成离线告警？', async () => {
+        try {
+            const created = await api('/gsp/environment/alarms/scan-offline', { method: 'POST' });
+            showToast(created.length ? `已生成 ${created.length} 条离线告警` : '扫描完成，未发现新增离线告警', 'success');
+            await loadTab();
+        } catch (e) { showToast(e.message, 'error'); }
+    }, '开始扫描');
+}
+
 function ackAlarm(id) {
     confirmModal('确认该告警？确认后需继续质量决策处置。', async () => {
         try {
@@ -405,7 +447,7 @@ function decideAlarm(id) {
         icon: 'fa-thermometer-half',
         desc: '温湿度监测设备与告警',
         init: pageInit,
-        fn: { ackAlarm, addReading, closeAssignment, decideAlarm, decideAssignment, decideDevice, recalibrateDevice, suspendDevice, viewReadings },
+        fn: { ackAlarm, addReading, closeAssignment, decideAlarm, decideAssignment, decideDevice, recalibrateDevice, scanOfflineAssignments, suspendDevice, verifyReadingChain, viewReadings },
     };
     window.pageInit = pageInit; // 兼容直接访问旧页面 environment.html
 })();
