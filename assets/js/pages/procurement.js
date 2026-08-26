@@ -350,10 +350,10 @@
     }
 
     function printRecord(receiptId) {
-        const modal = openModal({
-            title: '受控打印记录',
-            size: 'md',
-            body: `
+    const modal = openModal({
+        title: '受控打印记录',
+        size: 'md',
+        body: `
             <div class="form-row">
                 <div class="form-group"><label class="form-label">模板版本 *</label><input id="prVer" class="input-field" value="v1.0"></div>
                 <div class="form-group"><label class="form-label">份号 *</label><input id="prCopy" class="input-field"></div>
@@ -361,23 +361,100 @@
             <div class="form-group"><label class="form-label">用途 *（≥3字）</label><textarea id="prPurpose" class="input-field" rows="2"></textarea></div>
             <div class="form-group"><label class="form-label">登记原因 *（≥3字）</label><textarea id="prReason" class="input-field" rows="2"></textarea></div>
         `,
-            footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="prSubmitBtn">登记</button>`,
-        });
-        modal.querySelector('#prSubmitBtn').addEventListener('click', async () => {
-            const body = {
-                template_version: modal.querySelector('#prVer').value.trim(),
-                copy_no: modal.querySelector('#prCopy').value.trim(),
-                purpose: modal.querySelector('#prPurpose').value.trim(),
-                reason: modal.querySelector('#prReason').value.trim(),
-            };
-            if (!body.template_version || !body.copy_no || body.purpose.length < 3 || body.reason.length < 3) { showToast('请完整填写打印信息', 'warning'); return; }
-            try {
-                await api(`/gsp/receiving/receipts/${receiptId}/print-records`, { method: 'POST', body });
-                closeModal(modal);
-                showToast('受控打印已登记', 'success');
-            } catch (e) { showToast(e.message, 'error'); }
-        });
+        footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="prSubmitBtn">登记</button>`,
+    });
+    modal.querySelector('#prSubmitBtn').addEventListener('click', async () => {
+        const body = {
+            template_version: modal.querySelector('#prVer').value.trim(),
+            copy_no: modal.querySelector('#prCopy').value.trim(),
+            purpose: modal.querySelector('#prPurpose').value.trim(),
+            reason: modal.querySelector('#prReason').value.trim(),
+        };
+        if (!body.template_version || !body.copy_no || body.purpose.length < 3 || body.reason.length < 3) { showToast('请完整填写打印信息', 'warning'); return; }
+        const printWindow = window.open('', '_blank', 'width=1000,height=800');
+        if (!printWindow) {
+            showToast('浏览器阻止了打印窗口，请允许本站弹出窗口后重试', 'warning');
+            return;
+        }
+        printWindow.opener = null;
+        printWindow.document.write('<!doctype html><html><head><meta charset="utf-8"><title>正在生成受控打印记录</title></head><body>正在生成受控打印记录…</body></html>');
+        printWindow.document.close();
+        try {
+            const record = await api(`/gsp/receiving/receipts/${receiptId}/print-records`, { method: 'POST', body });
+            renderControlledReceiptPrint(printWindow, record);
+            closeModal(modal);
+            showToast('受控副本已生成，正在打开打印对话框', 'success');
+        } catch (e) {
+            printWindow.close();
+            showToast(e.message, 'error');
+        }
+    });
+}
+
+function renderControlledReceiptPrint(printWindow, record) {
+    const receipt = record.snapshot_data;
+    if (!receipt || !record.content_hash) {
+        throw new ApiError('后端未返回不可变受控打印快照', 0, record);
     }
+    const itemRows = (receipt.items || []).map(item => `
+        <tr>
+            <td>${esc(item.batch_no || item.batch_id || '-')}</td>
+            <td>${fmtNum(item.received_quantity)}</td>
+            <td>${fmtNum(item.accepted_quantity)}</td>
+            <td>${fmtNum(item.rejected_quantity)}</td>
+            <td>${esc(item.inspection_status || '-')}</td>
+            <td>${esc(item.inspection_conclusion || '-')}</td>
+        </tr>`).join('');
+    const html = `<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>收货验收记录 - ${esc(receipt?.receipt_no || receipt?.id || '')}</title>
+    <style>
+        @page { size: A4; margin: 16mm; }
+        body { color:#111827; font:14px/1.5 Arial,"Microsoft YaHei",sans-serif; }
+        h1 { margin:0 0 4px; text-align:center; font-size:22px; }
+        .subtitle { margin-bottom:20px; text-align:center; color:#4b5563; }
+        .meta { display:grid; grid-template-columns:1fr 1fr; gap:8px 24px; margin-bottom:18px; }
+        .meta div { border-bottom:1px solid #d1d5db; padding:5px 0; }
+        table { width:100%; border-collapse:collapse; margin-top:12px; }
+        th,td { border:1px solid #9ca3af; padding:7px; text-align:left; }
+        th { background:#f3f4f6; }
+        .control { margin-top:22px; border:2px solid #374151; padding:12px; }
+        .footer { margin-top:22px; display:flex; justify-content:space-between; color:#4b5563; font-size:12px; }
+    </style>
+</head>
+<body>
+    <h1>药品收货验收记录</h1>
+    <div class="subtitle">受控副本 · ${esc(record.copy_no)}</div>
+    <div class="meta">
+        <div>收货单号：${esc(receipt?.receipt_no || receipt?.id || '-')}</div>
+        <div>采购订单：${esc(receipt.purchase_order_no || receipt.purchase_order_id || '-')}</div>
+        <div>送货单号：${esc(receipt?.delivery_document_no || '-')}</div>
+        <div>到货时间：${fmtDT(receipt?.arrived_at)}</div>
+        <div>收货状态：${esc(receipt?.status || '-')}</div>
+        <div>记录编号：${esc(record.id)}</div>
+    </div>
+    <table>
+        <thead><tr><th>批号</th><th>收货数量</th><th>合格数量</th><th>拒收数量</th><th>验收状态</th><th>验收结论</th></tr></thead>
+        <tbody>${itemRows || '<tr><td colspan="6">无收货明细</td></tr>'}</tbody>
+    </table>
+    <div class="control">
+        <div>模板版本：${esc(record.template_version)}</div>
+        <div>打印用途：${esc(record.purpose)}</div>
+        <div>打印人员 ID：${esc(record.printed_by)}</div>
+        <div>生成时间：${fmtDT(record.printed_at)}</div>
+        <div>内容哈希：${esc(record.content_hash)}</div>
+    </div>
+    <div class="footer"><span>不可变受控副本 · 状态：${esc(record.status)}</span><span>份号：${esc(record.copy_no)}</span></div>
+</body>
+</html>`;
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    window.setTimeout(() => printWindow.print(), 250);
+}
 
     window.PAGES = window.PAGES || {};
     window.PAGES['procurement'] = {
