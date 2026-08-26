@@ -54,7 +54,7 @@
             renderTables();
         } catch (e) {
             showToast(e.message || '加载失败（用户列表需管理员权限）', 'error');
-            try { roles = await api('/gsp/roles'); renderTables(); } catch (e2) { /* ignore */ }
+            try { roles = await api('/gsp/roles'); renderTables(); } catch (e2) { showToast(e2.message || '岗位列表加载失败', 'error'); }
         }
     }
 
@@ -96,7 +96,6 @@
     async function openCreateUserModal() {
         let warehouses = [];
         try { warehouses = await refWarehouses(true); } catch (e) { /* 无仓库也可建用户 */ }
-        const roleVal = 'operator';
         const modal = openModal({
             title: '新增用户', size: 'md',
             body: `
@@ -115,6 +114,7 @@
                 <label class="form-label">分配仓库（操作员必选，管理员自动拥有全部仓库）</label>
                 <div id="cuWhList" class="checkbox-grid">${whCheckboxes(warehouses, [])}</div>
             </div>`,
+            <div class="form-group"><label class="form-label">创建原因 *（≥3字）</label><textarea id="cuReason" class="input-field" rows="2" placeholder="请输入批准依据或创建原因"></textarea></div>
             footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="cuSubmit">创建</button>`,
         });
         modal.querySelector('#cuRole').addEventListener('change', (e) => {
@@ -122,6 +122,7 @@
         });
         modal.querySelector('#cuSubmit').addEventListener('click', async () => {
             const role = modal.querySelector('#cuRole').value;
+            const reason = modal.querySelector('#cuReason').value.trim();
             const body = {
                 username: modal.querySelector('#cuUsername').value.trim(),
                 full_name: modal.querySelector('#cuFullName').value.trim(),
@@ -131,8 +132,9 @@
             };
             if (!body.username || !body.full_name || !body.password) { showToast('请填写用户名、姓名和密码', 'warning'); return; }
             if (body.role === 'operator' && !body.warehouse_ids.length) { showToast('操作员必须至少分配一个仓库', 'warning'); return; }
+            if (reason.length < 3) { showToast('创建原因不能少于3个字', 'warning'); return; }
             try {
-                await api('/users/', { method: 'POST', body });
+                await api(withReason('/users/', reason), { method: 'POST', body });
                 closeModal(modal); showToast('用户已创建（GSP岗位需另行授予）', 'success'); await load();
             } catch (e) { showToast(e.message, 'error'); }
         });
@@ -187,17 +189,20 @@
                 <div id="awList" class="checkbox-grid">${whCheckboxes(allWh, curIds)}</div>
             </div>
             <div class="text-xs" style="color:var(--gray-500)">当前默认仓库：${esc(curWh.find(w => w.is_default)?.name || '无')}</div>`,
+            <div class="form-group mt-3"><label class="form-label">权限变更原因 *（≥3字）</label><textarea id="awReason" class="input-field" rows="2"></textarea></div>
             footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="awSubmit">保存</button>`,
         });
         modal.querySelector('#awSubmit').addEventListener('click', async () => {
+            const reason = modal.querySelector('#awReason').value.trim();
+            if (reason.length < 3) { showToast('权限变更原因不能少于3个字', 'warning'); return; }
             const wanted = new Set(checkedWarehouseIds(modal));
             const curSet = new Set(curIds);
             const adds = allWh.filter(w => wanted.has(w.id) && !curSet.has(w.id));
             const removes = curWh.filter(w => !wanted.has(w.id));
             if (!adds.length && !removes.length) { closeModal(modal); showToast('没有变更', 'info'); return; }
             try {
-                for (const w of adds) await api(`/users/${id}/assign-warehouse?warehouse_id=${w.id}`, { method: 'POST' });
-                for (const w of removes) await api(`/users/${id}/unassign-warehouse?warehouse_id=${w.id}`, { method: 'DELETE' });
+                for (const w of adds) await api(withReason(`/users/${id}/assign-warehouse?warehouse_id=${w.id}`, reason), { method: 'POST' });
+                for (const w of removes) await api(withReason(`/users/${id}/unassign-warehouse?warehouse_id=${w.id}`, reason), { method: 'DELETE' });
                 closeModal(modal); showToast(`已分配 ${adds.length} 个、解除 ${removes.length} 个仓库`, 'success'); await load();
             } catch (e) { showToast(e.message, 'error'); }
         });
@@ -215,13 +220,19 @@
                     <option value="PROCUREMENT">PROCUREMENT 采购</option>
                     <option value="RECEIVER">RECEIVER 收货员</option>
                     <option value="INSPECTOR">INSPECTOR 验收员</option>
+                    <option value="WAREHOUSE_MANAGER">WAREHOUSE_MANAGER 仓储负责人</option>
                     <option value="WAREHOUSE_CUSTODIAN">WAREHOUSE_CUSTODIAN 仓管员</option>
+                    <option value="PICKER">PICKER 拣货员</option>
+                    <option value="STOCKTAKE">STOCKTAKE 盘点员</option>
                     <option value="SALES">SALES 销售</option>
                     <option value="DISPATCHER">DISPATCHER 发运员</option>
                     <option value="OUTBOUND_REVIEWER">OUTBOUND_REVIEWER 出库复核</option>
+                    <option value="RETURNS_RECEIVER">RETURNS_RECEIVER 退货收货员</option>
                     <option value="MAINTENANCE">MAINTENANCE 养护员</option>
+                    <option value="ENVIRONMENT_MONITOR">ENVIRONMENT_MONITOR 环境监测员</option>
                     <option value="TRANSPORT_COORDINATOR">TRANSPORT_COORDINATOR 运输调度</option>
                     <option value="AUDITOR">AUDITOR 审计</option>
+                    <option value="SYSTEM_ADMIN">SYSTEM_ADMIN 系统管理员</option>
                 </select>
             </div>
             <div class="form-group"><label class="form-label">批准依据引用 *（≥3字）</label><input id="grRef" class="input-field" placeholder="如岗位任命书/审批单号"></div>
