@@ -113,8 +113,8 @@
             <div id="cuWhWrap" class="form-group">
                 <label class="form-label">分配仓库（操作员必选，管理员自动拥有全部仓库）</label>
                 <div id="cuWhList" class="checkbox-grid">${whCheckboxes(warehouses, [])}</div>
-            </div>`,
-            <div class="form-group"><label class="form-label">创建原因 *（≥3字）</label><textarea id="cuReason" class="input-field" rows="2" placeholder="请输入批准依据或创建原因"></textarea></div>
+            </div>
+            <div class="form-group"><label class="form-label">创建原因 *（≥3字）</label><textarea id="cuReason" class="input-field" rows="2" placeholder="请输入批准依据或创建原因"></textarea></div>`,
             footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="cuSubmit">创建</button>`,
         });
         modal.querySelector('#cuRole').addEventListener('change', (e) => {
