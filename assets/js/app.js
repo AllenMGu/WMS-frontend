@@ -65,7 +65,9 @@ async function loadModule(key) {
 
 /* "全部功能"目录：SPA 内渲染所有页面按钮，点击原地加载 */
 function renderAll() {
-    const groups = (typeof NAV_GROUPS !== 'undefined') ? NAV_GROUPS : (window.NAV_GROUPS || []);
+    const groups = ((typeof NAV_GROUPS !== 'undefined') ? NAV_GROUPS : (window.NAV_GROUPS || []))
+        .map(group => ({ ...group, items: group.items.filter(item => canAccessPage(item.page)) }))
+        .filter(group => group.items.length);
     const holder = content();
     holder.innerHTML = `
         <div class="alert alert-info mb-4"><i class="fa fa-th-large mr-2"></i>全部功能目录：点击任意卡片，页面内容直接在当前页面加载（不跳转）。</div>
@@ -100,6 +102,10 @@ async function openModule(page) {
         return;
     }
     const key = moduleKey(page);
+    if (!canAccessPage(page)) {
+        content().innerHTML = '<div class="alert alert-error"><i class="fa fa-lock mr-2"></i>当前账号没有访问该模块的有效岗位。</div>';
+        return;
+    }
     if (!key || !(window.NAV_PAGES || []).includes(page)) {
         content().innerHTML = '<div class="alert alert-error">未知页面：' + esc(page) + '</div>';
         return;
@@ -127,17 +133,20 @@ function bindNav() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', function () {
-    // 等 common.js 渲染完 shell 后再接管导航
-    setTimeout(() => {
-        window.NAV_PAGES = ((typeof NAV_GROUPS !== 'undefined') ? NAV_GROUPS : (window.NAV_GROUPS || [])).flatMap(g => g.items.map(i => i.page)).filter(p => p !== 'all');
-        bindNav();
-        // 支持 ?page=xxx.html 指定初始模块（旧页面重定向入口）
-        let start = 'dashboard.html';
-        try {
-            const q = new URLSearchParams(window.location.search).get('page');
-            if (q && (q === 'all' || window.NAV_PAGES.includes(q))) start = q;
-        } catch (e) { /* 忽略解析失败 */ }
-        openModule(start);
-    }, 0);
+document.addEventListener('DOMContentLoaded', async function () {
+    const ready = await window.appShellReady;
+    if (!ready) return;
+
+    window.NAV_PAGES = ((typeof NAV_GROUPS !== 'undefined') ? NAV_GROUPS : (window.NAV_GROUPS || []))
+        .flatMap(group => group.items)
+        .filter(item => item.page !== 'all' && canAccessPage(item.page))
+        .map(item => item.page);
+    bindNav();
+
+    let start = 'dashboard.html';
+    try {
+        const requested = new URLSearchParams(window.location.search).get('page');
+        if (requested === 'all' || window.NAV_PAGES.includes(requested)) start = requested;
+    } catch (e) { /* 忽略解析失败 */ }
+    await openModule(start);
 });
