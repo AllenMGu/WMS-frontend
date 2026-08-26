@@ -1,17 +1,20 @@
-/* 合作方管理：建档 / 审批 / 资质文件 / 暂停 */
-'use strict';
-window.PAGE_TITLE = '合作方管理';
-const content = () => document.getElementById('pageContent');
-let partners = [];
-let currentFilter = { partner_type: '', status: '' };
+/* 合作方管理：建档 / 审批 / 资质文件 / 暂停
+ * SPA 模块：window.PAGES['partners'] = { title, icon, desc, init, fn } */
+(function () {
+    'use strict';
+    window.PAGE_TITLE = '合作方管理';
+    let _el = null;
+    const content = () => _el;
+    let partners = [];
+    let currentFilter = { partner_type: '', status: '' };
 
-window.pageInit = async function () {
-    render();
-    await load();
-};
+    async function pageInit(el) { _el = el || document.getElementById('pageContent');
+        render();
+        await load();
+    }
 
-function render() {
-    content().innerHTML = `
+    function render() {
+        content().innerHTML = `
         <div class="card">
             <div class="card-header">
                 <span class="card-title"><i class="fa fa-handshake-o mr-2" style="color:var(--primary)"></i>合作方（供货方 / 购货方）资质台账</span>
@@ -43,29 +46,29 @@ function render() {
                 </div>
             </div>
         </div>`;
-    document.getElementById('newPartnerBtn').addEventListener('click', openCreateModal);
-    document.getElementById('refreshBtn').addEventListener('click', () => load(true));
-    document.getElementById('fType').addEventListener('change', (e) => { currentFilter.partner_type = e.target.value; renderTable(); });
-    document.getElementById('fStatus').addEventListener('change', (e) => { currentFilter.status = e.target.value; renderTable(); });
-}
-
-async function load(force) {
-    try {
-        partners = await refPartners(force);
-        renderTable();
-    } catch (e) { showToast(e.message, 'error'); }
-}
-
-function renderTable() {
-    const rows = partners.filter(p =>
-        (!currentFilter.partner_type || p.partner_type === currentFilter.partner_type) &&
-        (!currentFilter.status || p.status === currentFilter.status));
-    const tbody = document.getElementById('partnerBody');
-    if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">暂无合作方，点击右上角新建</div></td></tr>';
-        return;
+        document.getElementById('newPartnerBtn').addEventListener('click', openCreateModal);
+        document.getElementById('refreshBtn').addEventListener('click', () => load(true));
+        document.getElementById('fType').addEventListener('change', (e) => { currentFilter.partner_type = e.target.value; renderTable(); });
+        document.getElementById('fStatus').addEventListener('change', (e) => { currentFilter.status = e.target.value; renderTable(); });
     }
-    tbody.innerHTML = rows.map(p => `
+
+    async function load(force) {
+        try {
+            partners = await refPartners(force);
+            renderTable();
+        } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    function renderTable() {
+        const rows = partners.filter(p =>
+            (!currentFilter.partner_type || p.partner_type === currentFilter.partner_type) &&
+            (!currentFilter.status || p.status === currentFilter.status));
+        const tbody = document.getElementById('partnerBody');
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">暂无合作方，点击右上角新建</div></td></tr>';
+            return;
+        }
+        tbody.innerHTML = rows.map(p => `
         <tr>
             <td class="font-medium">${esc(p.code)}</td>
             <td>${esc(p.name)}</td>
@@ -75,18 +78,18 @@ function renderTable() {
             <td>${fmtD(p.quality_agreement_valid_to)}</td>
             <td>${statusBadge(p.status)}</td>
             <td class="actions">
-                <button class="btn btn-link btn-sm" onclick="viewPartner(${p.id})"><i class="fa fa-folder-open-o"></i> 资质</button>
-                ${p.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="approvePartner(${p.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
-                ${p.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="suspendPartner(${p.id})"><i class="fa fa-pause"></i> 暂停</button>` : ''}
+                <button class="btn btn-link btn-sm" onclick="PG('partners').viewPartner(${p.id})"><i class="fa fa-folder-open-o"></i> 资质</button>
+                ${p.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('partners').approvePartner(${p.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
+                ${p.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="PG('partners').suspendPartner(${p.id})"><i class="fa fa-pause"></i> 暂停</button>` : ''}
             </td>
         </tr>`).join('');
-}
+    }
 
-function openCreateModal() {
-    const modal = openModal({
-        title: '新建合作方建档',
-        size: 'md',
-        body: `
+    function openCreateModal() {
+        const modal = openModal({
+            title: '新建合作方建档',
+            size: 'md',
+            body: `
             <div class="form-row">
                 <div class="form-group"><label class="form-label">编码 *</label><input id="pCode" class="input-field" placeholder="如 SUP001"></div>
                 <div class="form-group"><label class="form-label">名称 *</label><input id="pName" class="input-field" placeholder="企业名称"></div>
@@ -108,72 +111,63 @@ function openCreateModal() {
             </div>
             <div class="form-group"><label class="form-label">建档原因 *（≥3字）</label><textarea id="pReason" class="input-field" rows="2"></textarea></div>
         `,
-        footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="pSubmitBtn">提交建档</button>`,
-    });
-    modal.querySelector('#pSubmitBtn').addEventListener('click', async () => {
-        const body = {
-            code: modal.querySelector('#pCode').value.trim(),
-            name: modal.querySelector('#pName').value.trim(),
-            partner_type: modal.querySelector('#pType').value,
-            unified_social_credit_code: modal.querySelector('#pCredit').value.trim() || null,
-            license_no: modal.querySelector('#pLicNo').value.trim(),
-            license_scope: modal.querySelector('#pLicScope').value.trim(),
-            license_valid_from: modal.querySelector('#pLicFrom').value || null,
-            license_valid_to: modal.querySelector('#pLicTo').value,
-            quality_agreement_valid_to: modal.querySelector('#pAgreeTo').value || null,
-            reason: modal.querySelector('#pReason').value.trim(),
-        };
-        if (!body.code || !body.name || !body.license_no || !body.license_scope || !body.license_valid_to) { showToast('请填写必填项', 'warning'); return; }
-        if (body.reason.length < 3) { showToast('建档原因不能少于3个字', 'warning'); return; }
-        try {
-            await api('/gsp/partners', { method: 'POST', body });
-            closeModal(modal);
-            showToast('合作方已建档，等待质量审批', 'success');
-            await load(true);
-        } catch (e) { showToast(e.message, 'error'); }
-    });
-}
-
-function approvePartner(id) {
-    const p = partners.find(x => x.id === id);
-    signAction(
-        { action: 'PARTNER_APPROVE', entity_type: 'GspBusinessPartner', entity_id: id, meaning: 'APPROVAL' },
-        { path: `/gsp/partners/${id}/approve`, opts: { method: 'POST', body: { reason: '' } } },
-        `批准合作方「${p ? p.name : id}」`
-    );
-}
-
-function suspendPartner(id) {
-    const p = partners.find(x => x.id === id);
-    signAction(
-        { action: 'PARTNER_SUSPEND', entity_type: 'GspBusinessPartner', entity_id: id, meaning: 'RESPONSIBILITY' },
-        { path: `/gsp/partners/${id}/suspend`, opts: { method: 'POST', body: { reason: '' } } },
-        `暂停合作方「${p ? p.name : id}」`
-    );
-}
-
-async function viewPartner(id) {
-    const p = partners.find(x => x.id === id);
-    let docs = [];
-    try {
-        docs = await apiAll(`/gsp/partners/${id}/documents`);
-    } catch (e) {
-        openModal({
-            title: `合作方资质 - ${p ? p.name : id}`,
-            size: 'sm',
-            body: `<div class="alert alert-error"><i class="fa fa-exclamation-circle mr-2"></i>资质文件加载失败：${esc(e.message)}</div>`,
+            footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="pSubmitBtn">提交建档</button>`,
         });
-        return;
+        modal.querySelector('#pSubmitBtn').addEventListener('click', async () => {
+            const body = {
+                code: modal.querySelector('#pCode').value.trim(),
+                name: modal.querySelector('#pName').value.trim(),
+                partner_type: modal.querySelector('#pType').value,
+                unified_social_credit_code: modal.querySelector('#pCredit').value.trim() || null,
+                license_no: modal.querySelector('#pLicNo').value.trim(),
+                license_scope: modal.querySelector('#pLicScope').value.trim(),
+                license_valid_from: modal.querySelector('#pLicFrom').value || null,
+                license_valid_to: modal.querySelector('#pLicTo').value,
+                quality_agreement_valid_to: modal.querySelector('#pAgreeTo').value || null,
+                reason: modal.querySelector('#pReason').value.trim(),
+            };
+            if (!body.code || !body.name || !body.license_no || !body.license_scope || !body.license_valid_to) { showToast('请填写必填项', 'warning'); return; }
+            if (body.reason.length < 3) { showToast('建档原因不能少于3个字', 'warning'); return; }
+            try {
+                await api('/gsp/partners', { method: 'POST', body });
+                closeModal(modal);
+                showToast('合作方已建档，等待质量审批', 'success');
+                await load(true);
+            } catch (e) { showToast(e.message, 'error'); }
+        });
     }
-    // 该类型合作方批准所需的已核验文件清单
-    const required = p.partner_type === 'SUPPLIER' ? ['BUSINESS_LICENSE', 'DRUG_LICENSE', 'QUALITY_AGREEMENT', 'SALES_AUTHORIZATION']
-        : p.partner_type === 'CUSTOMER' ? ['BUSINESS_LICENSE', 'DRUG_LICENSE', 'PROCUREMENT_AUTHORIZATION']
-        : ['BUSINESS_LICENSE', 'DRUG_LICENSE', 'QUALITY_AGREEMENT', 'SALES_AUTHORIZATION', 'PROCUREMENT_AUTHORIZATION'];
-    const verifiedTypes = new Set(docs.filter(d => d.status === 'VERIFIED').map(d => d.document_type));
-    const modal = openModal({
-        title: `合作方资质 - ${p ? p.name : id}`,
-        size: 'lg',
-        body: `
+
+    function approvePartner(id) {
+        const p = partners.find(x => x.id === id);
+        signAction(
+            { action: 'PARTNER_APPROVE', entity_type: 'GspBusinessPartner', entity_id: id, meaning: 'APPROVAL' },
+            { path: `/gsp/partners/${id}/approve`, opts: { method: 'POST', body: { reason: '' } } },
+            `批准合作方「${p ? p.name : id}」`
+        );
+    }
+
+    function suspendPartner(id) {
+        const p = partners.find(x => x.id === id);
+        signAction(
+            { action: 'PARTNER_SUSPEND', entity_type: 'GspBusinessPartner', entity_id: id, meaning: 'RESPONSIBILITY' },
+            { path: `/gsp/partners/${id}/suspend`, opts: { method: 'POST', body: { reason: '' } } },
+            `暂停合作方「${p ? p.name : id}」`
+        );
+    }
+
+    async function viewPartner(id) {
+        const p = partners.find(x => x.id === id);
+        let docs = [];
+        try { docs = await api(`/gsp/partners/${id}/documents`); } catch (e) { docs = []; }
+        // 该类型合作方批准所需的已核验文件清单
+        const required = p.partner_type === 'SUPPLIER' ? ['BUSINESS_LICENSE', 'DRUG_LICENSE', 'QUALITY_AGREEMENT', 'SALES_AUTHORIZATION']
+            : p.partner_type === 'CUSTOMER' ? ['BUSINESS_LICENSE', 'DRUG_LICENSE', 'PROCUREMENT_AUTHORIZATION']
+            : ['BUSINESS_LICENSE', 'DRUG_LICENSE', 'QUALITY_AGREEMENT', 'SALES_AUTHORIZATION', 'PROCUREMENT_AUTHORIZATION'];
+        const verifiedTypes = new Set(docs.filter(d => d.status === 'VERIFIED').map(d => d.document_type));
+        const modal = openModal({
+            title: `合作方资质 - ${p ? p.name : id}`,
+            size: 'lg',
+            body: `
             <div class="detail-grid mb-4">
                 <div class="kv"><span class="kv-label">编码</span><span>${esc(p.code)}</span></div>
                 <div class="kv"><span class="kv-label">类型</span><span>${badge({ SUPPLIER: '供货方', CUSTOMER: '购货方', BOTH: '供货+购货' }[p.partner_type] || p.partner_type, 'info')}</span></div>
@@ -197,10 +191,10 @@ async function viewPartner(id) {
                 </table>
             </div>
         `,
-    });
-    const renderDocs = () => {
-        const tbody = modal.querySelector('#docBody');
-        tbody.innerHTML = docs.length ? docs.map(d => `
+        });
+        const renderDocs = () => {
+            const tbody = modal.querySelector('#docBody');
+            tbody.innerHTML = docs.length ? docs.map(d => `
             <tr>
                 <td>${docTypeLabel(d.document_type)}</td>
                 <td>${esc(d.document_no)}</td>
@@ -209,19 +203,19 @@ async function viewPartner(id) {
                 <td>${esc(d.person_role || '-')}</td>
                 <td>${statusBadge(d.status)}</td>
                 <td class="actions">
-                    ${d.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="verifyDoc(${id}, ${d.id})"><i class="fa fa-check-circle"></i> 核验</button>` : ''}
+                    ${d.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('partners').verifyDoc(${id}, ${d.id})"><i class="fa fa-check-circle"></i> 核验</button>` : ''}
                 </td>
             </tr>`).join('') : '<tr><td colspan="7"><div class="empty-state">暂无资质文件</div></td></tr>';
-    };
-    renderDocs();
-    modal.querySelector('#addDocBtn').addEventListener('click', () => openDocModal(id, docs, renderDocs));
-}
+        };
+        renderDocs();
+        modal.querySelector('#addDocBtn').addEventListener('click', () => openDocModal(id, docs, renderDocs));
+    }
 
-function openDocModal(partnerId, docs, onAdd) {
-    const modal = openModal({
-        title: '新增资质文件',
-        size: 'md',
-        body: `
+    function openDocModal(partnerId, docs, onAdd) {
+        const modal = openModal({
+            title: '新增资质文件',
+            size: 'md',
+            body: `
             <div class="form-row">
                 <div class="form-group"><label class="form-label">文件类型 *（与后端批准清单一致）</label>
                     <select id="dType" class="input-field">
@@ -245,35 +239,46 @@ function openDocModal(partnerId, docs, onAdd) {
             <div class="form-group"><label class="form-label">文件引用（file_ref）*</label><input id="dRef" class="input-field" placeholder="如电子档案路径/URL"></div>
             <div class="form-group"><label class="form-label">登记原因 *（≥3字）</label><textarea id="dReason" class="input-field" rows="2"></textarea></div>
         `,
-        footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="dSubmitBtn">保存</button>`,
-    });
-    modal.querySelector('#dSubmitBtn').addEventListener('click', async () => {
-        const body = {
-            document_type: modal.querySelector('#dType').value,
-            document_no: modal.querySelector('#dNo').value.trim(),
-            valid_from: modal.querySelector('#dFrom').value || null,
-            valid_to: modal.querySelector('#dTo').value,
-            file_ref: modal.querySelector('#dRef').value.trim(),
-            person_name: modal.querySelector('#dPerson').value.trim() || null,
-            person_role: modal.querySelector('#dRole').value.trim() || null,
-            reason: modal.querySelector('#dReason').value.trim(),
-        };
-        if (!body.document_no || !body.valid_to || !body.file_ref) { showToast('请填写必填项', 'warning'); return; }
-        if (body.reason.length < 3) { showToast('登记原因不能少于3个字', 'warning'); return; }
-        try {
-            const doc = await api(`/gsp/partners/${partnerId}/documents`, { method: 'POST', body });
-            docs.unshift(doc);
-            closeModal(modal);
-            onAdd();
-            showToast('资质文件已登记（待核验）', 'success');
-        } catch (e) { showToast(e.message, 'error'); }
-    });
-}
+            footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="dSubmitBtn">保存</button>`,
+        });
+        modal.querySelector('#dSubmitBtn').addEventListener('click', async () => {
+            const body = {
+                document_type: modal.querySelector('#dType').value,
+                document_no: modal.querySelector('#dNo').value.trim(),
+                valid_from: modal.querySelector('#dFrom').value || null,
+                valid_to: modal.querySelector('#dTo').value,
+                file_ref: modal.querySelector('#dRef').value.trim(),
+                person_name: modal.querySelector('#dPerson').value.trim() || null,
+                person_role: modal.querySelector('#dRole').value.trim() || null,
+                reason: modal.querySelector('#dReason').value.trim(),
+            };
+            if (!body.document_no || !body.valid_to || !body.file_ref) { showToast('请填写必填项', 'warning'); return; }
+            if (body.reason.length < 3) { showToast('登记原因不能少于3个字', 'warning'); return; }
+            try {
+                const doc = await api(`/gsp/partners/${partnerId}/documents`, { method: 'POST', body });
+                docs.unshift(doc);
+                closeModal(modal);
+                onAdd();
+                showToast('资质文件已登记（待核验）', 'success');
+            } catch (e) { showToast(e.message, 'error'); }
+        });
+    }
 
-function verifyDoc(partnerId, docId) {
-    signAction(
-        { action: 'PARTNER_DOCUMENT_VERIFY', entity_type: 'GspPartnerDocument', entity_id: docId, meaning: 'REVIEW' },
-        { path: `/gsp/partners/${partnerId}/documents/${docId}/verify`, opts: { method: 'POST', body: { reason: '' } } },
-        '核验资质文件'
-    );
-}
+    function verifyDoc(partnerId, docId) {
+        signAction(
+            { action: 'PARTNER_DOCUMENT_VERIFY', entity_type: 'GspPartnerDocument', entity_id: docId, meaning: 'REVIEW' },
+            { path: `/gsp/partners/${partnerId}/documents/${docId}/verify`, opts: { method: 'POST', body: { reason: '' } } },
+            '核验资质文件'
+        );
+    }
+
+    window.PAGES = window.PAGES || {};
+    window.PAGES['partners'] = {
+        title: '合作方管理',
+        icon: 'fa-handshake-o',
+        desc: '供货方/购货方资质建档与核验',
+        init: pageInit,
+        fn: { viewPartner, approvePartner, suspendPartner, verifyDoc },
+    };
+    window.pageInit = pageInit; // 兼容直接访问旧页面 partners.html
+})();

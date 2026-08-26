@@ -1,13 +1,16 @@
-/* 药品与批次：品种档案 / 批次台账 / 批号库存 / 质量锁定 */
-'use strict';
-window.PAGE_TITLE = '药品与批次';
-const content = () => document.getElementById('pageContent');
+/* 药品与批次：品种档案 / 批次台账 / 批号库存 / 质量锁定
+ * SPA 模块：window.PAGES['products'] = { title, icon, desc, init, fn } */
+(function () {
+    'use strict';
+    window.PAGE_TITLE = '药品与批次';
+    let _el = null;
+    const content = () => _el;
 let tab = 'profiles';
 let goodsList = [];
 let partners = [];
 
-window.pageInit = async function () {
-    await Promise.all([refGoods(), refPartners()]).then(([g, p]) => { goodsList = g; partners = p; });
+async function pageInit(el) { _el = el || document.getElementById('pageContent');
+    await Promise.all([refGoods(), refPartners()]).then(([g, p]) => { goodsList = g; partners = p; }).catch(() => {});
     render();
     await loadTab();
 };
@@ -67,8 +70,8 @@ async function renderProfiles(box) {
                             <td>${boolBadge(p.traceability_required)}</td>
                             <td>${statusBadge(p.status)}</td>
                             <td class="actions">
-                                <button class="btn btn-link btn-sm" onclick="openProfileModal(${p.goods_id}, ${p.id})"><i class="fa fa-edit"></i> 编辑</button>
-                                ${p.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="approveProfile(${p.goods_id})"><i class="fa fa-check"></i> 批准</button>` : ''}
+                                <button class="btn btn-link btn-sm" onclick="PG('products').openProfileModal(${p.goods_id}, ${p.id})"><i class="fa fa-edit"></i> 编辑</button>
+                                ${p.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('products').approveProfile(${p.goods_id})"><i class="fa fa-check"></i> 批准</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="10"><div class="empty-state">暂无品种档案</div></td></tr>'}</tbody>
                 </table>
@@ -77,7 +80,7 @@ async function renderProfiles(box) {
             <div class="card-body">
                 <div class="text-sm font-medium mb-2" style="color:var(--gray-500)">未建档货物（${unprofiled.length}）</div>
                 <div class="flex flex-wrap gap-1">
-                    ${unprofiled.slice(0, 20).map(g => `<button class="btn btn-secondary btn-xs" onclick="openProfileModal(${g.id}, null)">${esc(g.name)}</button>`).join('')}
+                    ${unprofiled.slice(0, 20).map(g => `<button class="btn btn-secondary btn-xs" onclick="PG('products').openProfileModal(${g.id}, null)">${esc(g.name)}</button>`).join('')}
                     ${unprofiled.length > 20 ? `<span class="text-xs text-gray-400">等 ${unprofiled.length} 项</span>` : ''}
                 </div>
             </div>` : ''}
@@ -240,7 +243,7 @@ function renderBatchRows(batches, search, status) {
             <td>${esc(b.traceability_code || '-')}</td>
             <td>${statusBadge(b.status)}</td>
             <td class="actions">
-                ${b.status === 'PENDING_INSPECTION' ? `<button class="btn btn-link btn-sm" onclick="acceptBatch(${b.id})"><i class="fa fa-check-circle"></i> 验收放行</button>` : ''}
+                ${b.status === 'PENDING_INSPECTION' ? `<button class="btn btn-link btn-sm" onclick="PG('products').acceptBatch(${b.id})"><i class="fa fa-check-circle"></i> 验收放行</button>` : ''}
             </td>
         </tr>`).join('') || '<tr><td colspan="9"><div class="empty-state">暂无批次</div></td></tr>';
 }
@@ -406,7 +409,7 @@ async function renderHolds(box) {
                             <td>${fmtDT(h.initiated_at)}</td>
                             <td>${statusBadge(h.status)}</td>
                             <td class="actions">
-                                ${h.status === 'ACTIVE' ? `<button class="btn btn-link btn-sm" onclick="releaseHold(${h.id})"><i class="fa fa-unlock"></i> 解除</button>` : ''}
+                                ${h.status === 'ACTIVE' ? `<button class="btn btn-link btn-sm" onclick="PG('products').releaseHold(${h.id})"><i class="fa fa-unlock"></i> 解除</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无质量锁定</div></td></tr>'}</tbody>
                 </table>
@@ -456,3 +459,15 @@ function releaseHold(id) {
         '解除质量锁定'
     );
 }
+
+
+    window.PAGES = window.PAGES || {};
+    window.PAGES['products'] = {
+        title: '药品与批次',
+        icon: 'fa-cubes',
+        desc: '药品质量档案、批次与批号库存',
+        init: pageInit,
+        fn: { openProfileModal, approveProfile, acceptBatch, releaseHold },
+    };
+    window.pageInit = pageInit; // 兼容直接访问旧页面 products.html
+})();

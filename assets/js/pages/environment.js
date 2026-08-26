@@ -1,16 +1,19 @@
-/* 温湿度监测：监测设备（审批/校准/暂停）、监测点位（审批/读数/关闭）、实时告警（确认/决策） */
-'use strict';
-window.PAGE_TITLE = '温湿度监测';
-const content = () => document.getElementById('pageContent');
-let tab = 'devices';
+/* 温湿度监测：监测设备（审批/校准/暂停）、监测点位（审批/读数/关闭）、实时告警（确认/决策）
+ * SPA 模块：window.PAGES['environment'] = { title, icon, desc, init, fn } */
+(function () {
+    'use strict';
+    window.PAGE_TITLE = '温湿度监测';
+    let _el = null;
+    const content = () => _el;
+    let tab = 'devices';
 let devices = [];
 let assignments = [];
 let alarms = [];
 let warehouses = [];
 let locations = [];
 
-window.pageInit = async function () {
-    [warehouses, locations] = await Promise.all([refWarehouses(), refLocations()]);
+async function pageInit(el) { _el = el || document.getElementById('pageContent');
+    try { [warehouses, locations] = await Promise.all([refWarehouses(), refLocations()]); } catch (e) { /* ignore */ }
     render();
     await loadTab();
 };
@@ -60,8 +63,8 @@ async function renderDevices(box) {
                             <td>${fmtD(d.calibration_valid_to)} ${d.calibration_valid_to && new Date(d.calibration_valid_to) < new Date() ? badge('已过期', 'danger') : ''}</td>
                             <td>${statusBadge(d.status)}</td>
                             <td class="actions">
-                                ${d.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="decideDevice(${d.id})"><i class="fa fa-gavel"></i> 审批</button>` : ''}
-                                ${d.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="recalibrateDevice(${d.id})"><i class="fa fa-wrench"></i> 校准</button><button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="suspendDevice(${d.id})"><i class="fa fa-pause"></i> 停用</button>` : ''}
+                                ${d.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('environment').decideDevice(${d.id})"><i class="fa fa-gavel"></i> 审批</button>` : ''}
+                                ${d.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="PG('environment').recalibrateDevice(${d.id})"><i class="fa fa-wrench"></i> 校准</button><button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="PG('environment').suspendDevice(${d.id})"><i class="fa fa-pause"></i> 停用</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无监测设备</div></td></tr>'}</tbody>
                 </table>
@@ -192,8 +195,8 @@ async function renderAssignments(box) {
                             <td>${fmtDT(a.last_reading_at)}</td>
                             <td>${statusBadge(a.status)}</td>
                             <td class="actions">
-                                ${a.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="decideAssignment(${a.id})"><i class="fa fa-gavel"></i> 审批</button>` : ''}
-                                ${a.status === 'ACTIVE' ? `<button class="btn btn-link btn-sm" onclick="addReading(${a.id})"><i class="fa fa-plus-circle"></i> 录入读数</button><button class="btn btn-link btn-sm" onclick="viewReadings(${a.id})"><i class="fa fa-table"></i> 读数</button><button class="btn btn-link btn-sm" onclick="verifyReadingChain(${a.id})"><i class="fa fa-link"></i> 核验链</button><button class="btn btn-link btn-sm" onclick="closeAssignment(${a.id})"><i class="fa fa-times"></i> 关闭</button>` : ''}
+                                ${a.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('environment').decideAssignment(${a.id})"><i class="fa fa-gavel"></i> 审批</button>` : ''}
+                                ${a.status === 'ACTIVE' ? `<button class="btn btn-link btn-sm" onclick="PG('environment').addReading(${a.id})"><i class="fa fa-plus-circle"></i> 录入读数</button><button class="btn btn-link btn-sm" onclick="PG('environment').viewReadings(${a.id})"><i class="fa fa-table"></i> 读数</button><button class="btn btn-link btn-sm" onclick="PG('environment').verifyReadingChain(${a.id})"><i class="fa fa-link"></i> 核验链</button><button class="btn btn-link btn-sm" onclick="PG('environment').closeAssignment(${a.id})"><i class="fa fa-times"></i> 关闭</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无监测点位</div></td></tr>'}</tbody>
                 </table>
@@ -383,8 +386,8 @@ async function renderAlarms(box) {
                             <td>${fmtDT(a.opened_at)}</td>
                             <td>${statusBadge(a.status)}</td>
                             <td class="actions">
-                                ${a.status === 'OPEN' ? `<button class="btn btn-link btn-sm" onclick="ackAlarm(${a.id})"><i class="fa fa-check"></i> 确认</button>` : ''}
-                                ${['OPEN', 'ACKNOWLEDGED'].includes(a.status) ? `<button class="btn btn-link btn-sm" onclick="decideAlarm(${a.id})"><i class="fa fa-gavel"></i> 决策</button>` : ''}
+                                ${a.status === 'OPEN' ? `<button class="btn btn-link btn-sm" onclick="PG('environment').ackAlarm(${a.id})"><i class="fa fa-check"></i> 确认</button>` : ''}
+                                ${['OPEN', 'ACKNOWLEDGED'].includes(a.status) ? `<button class="btn btn-link btn-sm" onclick="PG('environment').decideAlarm(${a.id})"><i class="fa fa-gavel"></i> 决策</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无告警记录</div></td></tr>'}</tbody>
                 </table>
@@ -437,3 +440,14 @@ function decideAlarm(id) {
             { path: `/gsp/environment/alarms/${id}/decision`, opts: { method: 'POST', body } }, '告警质量决策');
     });
 }
+
+    window.PAGES = window.PAGES || {};
+    window.PAGES['environment'] = {
+        title: '温湿度监测',
+        icon: 'fa-thermometer-half',
+        desc: '温湿度监测设备与告警',
+        init: pageInit,
+        fn: { ackAlarm, addReading, closeAssignment, decideAlarm, decideAssignment, decideDevice, recalibrateDevice, scanOfflineAssignments, suspendDevice, verifyReadingChain, viewReadings },
+    };
+    window.pageInit = pageInit; // 兼容直接访问旧页面 environment.html
+})();

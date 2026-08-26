@@ -1,12 +1,15 @@
-/* 运输与签收：承运方（资质/车辆/驾驶员）、运输任务（事件/异常/签收/关闭） */
-'use strict';
-window.PAGE_TITLE = '运输与签收';
-const content = () => document.getElementById('pageContent');
-let tab = 'carriers';
+/* 运输与签收：承运方（资质/车辆/驾驶员）、运输任务（事件/异常/签收/关闭）
+ * SPA 模块：window.PAGES['transport'] = { title, icon, desc, init, fn } */
+(function () {
+    'use strict';
+    window.PAGE_TITLE = '运输与签收';
+    let _el = null;
+    const content = () => _el;
+    let tab = 'carriers';
 let carriers = [];
 let tasks = [];
 
-window.pageInit = async function () {
+async function pageInit(el) { _el = el || document.getElementById('pageContent');
     render();
     await loadTab();
 };
@@ -55,9 +58,9 @@ async function renderCarriers(box) {
                             <td>${fmtD(c.quality_agreement_valid_to)}</td>
                             <td>${statusBadge(c.status)}</td>
                             <td class="actions">
-                                <button class="btn btn-link btn-sm" onclick="viewCarrier(${c.id})"><i class="fa fa-folder-open-o"></i> 详情</button>
-                                ${c.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="decideCarrier(${c.id})"><i class="fa fa-gavel"></i> 审批</button>` : ''}
-                                ${c.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="suspendCarrier(${c.id})"><i class="fa fa-pause"></i> 暂停</button>` : ''}
+                                <button class="btn btn-link btn-sm" onclick="PG('transport').viewCarrier(${c.id})"><i class="fa fa-folder-open-o"></i> 详情</button>
+                                ${c.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('transport').decideCarrier(${c.id})"><i class="fa fa-gavel"></i> 审批</button>` : ''}
+                                ${c.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="PG('transport').suspendCarrier(${c.id})"><i class="fa fa-pause"></i> 暂停</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无承运方</div></td></tr>'}</tbody>
                 </table>
@@ -157,7 +160,7 @@ async function viewCarrier(id) {
         api(`/gsp/transport/carriers/${id}/documents`),
         api(`/gsp/transport/carriers/${id}/vehicles`),
         api(`/gsp/transport/carriers/${id}/drivers`),
-    ]); } catch (e) { showToast(`承运方明细加载失败：${e.message}`, 'error'); return; }
+    ]); } catch (e) { /* ignore */ }
     const modal = openModal({
         title: `承运方详情 - ${c ? c.name : id}`,
         size: 'lg',
@@ -176,7 +179,7 @@ async function viewCarrier(id) {
             <button class="btn btn-primary btn-sm" id="vAddDoc"><i class="fa fa-plus"></i> 新增</button></div>
             <div class="table-wrap"><table class="data-table">
                 <thead><tr><th>类型</th><th>编号</th><th>有效期</th><th>状态</th><th class="actions">操作</th></tr></thead>
-                <tbody>${docs.map(d => `<tr><td>${docTypeLabel(d.document_type)}</td><td>${esc(d.document_no)}</td><td>${fmtD(d.valid_to)}</td><td>${statusBadge(d.status)}</td><td class="actions">${d.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="decideDoc(${id}, ${d.id})"><i class="fa fa-gavel"></i> 审批</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5"><div class="empty-state">无文件</div></td></tr>'}</tbody></table></div>`;
+                <tbody>${docs.map(d => `<tr><td>${docTypeLabel(d.document_type)}</td><td>${esc(d.document_no)}</td><td>${fmtD(d.valid_to)}</td><td>${statusBadge(d.status)}</td><td class="actions">${d.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('transport').decideDoc(${id}, ${d.id})"><i class="fa fa-gavel"></i> 审批</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5"><div class="empty-state">无文件</div></td></tr>'}</tbody></table></div>`;
         panel.querySelector('#vAddDoc').addEventListener('click', () => {
             const m2 = openModal({
                 title: '新增承运方资质文件', size: 'md',
@@ -208,7 +211,7 @@ async function viewCarrier(id) {
             <button class="btn btn-primary btn-sm" id="vAddVeh"><i class="fa fa-plus"></i> 新增</button></div>
             <div class="table-wrap"><table class="data-table">
                 <thead><tr><th>车牌</th><th>类型</th><th>资质引用</th><th>资质有效期</th><th>状态</th><th class="actions">操作</th></tr></thead>
-                <tbody>${vehicles.map(v => `<tr><td>${esc(v.vehicle_no)}</td><td>${esc(v.vehicle_type)}</td><td>${esc(v.qualification_ref)}</td><td>${fmtD(v.qualification_valid_to)}</td><td>${statusBadge(v.status)}</td><td class="actions">${v.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="decideVehicle(${v.id})"><i class="fa fa-gavel"></i> 审批</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6"><div class="empty-state">无车辆</div></td></tr>'}</tbody></table></div>`;
+                <tbody>${vehicles.map(v => `<tr><td>${esc(v.vehicle_no)}</td><td>${esc(v.vehicle_type)}</td><td>${esc(v.qualification_ref)}</td><td>${fmtD(v.qualification_valid_to)}</td><td>${statusBadge(v.status)}</td><td class="actions">${v.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('transport').decideVehicle(${v.id})"><i class="fa fa-gavel"></i> 审批</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6"><div class="empty-state">无车辆</div></td></tr>'}</tbody></table></div>`;
         panel.querySelector('#vAddVeh').addEventListener('click', () => {
             const m2 = openModal({
                 title: '新增车辆', size: 'md',
@@ -243,7 +246,7 @@ async function viewCarrier(id) {
             <button class="btn btn-primary btn-sm" id="vAddDrv"><i class="fa fa-plus"></i> 新增</button></div>
             <div class="table-wrap"><table class="data-table">
                 <thead><tr><th>姓名</th><th>人员编码</th><th>资质引用</th><th>授权有效期</th><th>状态</th><th class="actions">操作</th></tr></thead>
-                <tbody>${drivers.map(d => `<tr><td>${esc(d.name)}</td><td>${esc(d.personnel_code)}</td><td>${esc(d.qualification_ref)}</td><td>${fmtD(d.authorization_valid_to)}</td><td>${statusBadge(d.status)}</td><td class="actions">${d.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="decideDriver(${d.id})"><i class="fa fa-gavel"></i> 审批</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6"><div class="empty-state">无驾驶员</div></td></tr>'}</tbody></table></div>`;
+                <tbody>${drivers.map(d => `<tr><td>${esc(d.name)}</td><td>${esc(d.personnel_code)}</td><td>${esc(d.qualification_ref)}</td><td>${fmtD(d.authorization_valid_to)}</td><td>${statusBadge(d.status)}</td><td class="actions">${d.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('transport').decideDriver(${d.id})"><i class="fa fa-gavel"></i> 审批</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6"><div class="empty-state">无驾驶员</div></td></tr>'}</tbody></table></div>`;
         panel.querySelector('#vAddDrv').addEventListener('click', () => {
             const m2 = openModal({
                 title: '新增驾驶员', size: 'md',
@@ -320,10 +323,10 @@ async function renderTasks(box) {
                             <td>${fmtDT(t.expected_arrival_at)}</td>
                             <td>${statusBadge(t.status)}</td>
                             <td class="actions">
-                                <button class="btn btn-link btn-sm" onclick="viewTask(${t.id})"><i class="fa fa-eye"></i> 详情</button>
-                                ${['IN_TRANSIT', 'EXCEPTION'].includes(t.status) ? `<button class="btn btn-link btn-sm" onclick="addEvent(${t.id})"><i class="fa fa-map-marker"></i> 事件</button><button class="btn btn-link btn-sm" onclick="reportException(${t.id})"><i class="fa fa-exclamation-circle"></i> 异常</button>` : ''}
-                                ${['IN_TRANSIT', 'EXCEPTION'].includes(t.status) ? `<button class="btn btn-link btn-sm" onclick="recordDelivery(${t.id})"><i class="fa fa-sign-in"></i> 签收</button>` : ''}
-                                ${t.status === 'DELIVERED' ? `<button class="btn btn-link btn-sm" onclick="closeTask(${t.id})"><i class="fa fa-check"></i> 关闭</button>` : ''}
+                                <button class="btn btn-link btn-sm" onclick="PG('transport').viewTask(${t.id})"><i class="fa fa-eye"></i> 详情</button>
+                                ${['IN_TRANSIT', 'EXCEPTION'].includes(t.status) ? `<button class="btn btn-link btn-sm" onclick="PG('transport').addEvent(${t.id})"><i class="fa fa-map-marker"></i> 事件</button><button class="btn btn-link btn-sm" onclick="PG('transport').reportException(${t.id})"><i class="fa fa-exclamation-circle"></i> 异常</button>` : ''}
+                                ${['IN_TRANSIT', 'EXCEPTION'].includes(t.status) ? `<button class="btn btn-link btn-sm" onclick="PG('transport').recordDelivery(${t.id})"><i class="fa fa-sign-in"></i> 签收</button>` : ''}
+                                ${t.status === 'DELIVERED' ? `<button class="btn btn-link btn-sm" onclick="PG('transport').closeTask(${t.id})"><i class="fa fa-check"></i> 关闭</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无运输任务（备货发运后自动创建）</div></td></tr>'}</tbody>
                 </table>
@@ -333,7 +336,7 @@ async function renderTasks(box) {
 async function viewTask(id) {
     const t = tasks.find(x => x.id === id);
     let events = [], exceptions = [];
-    try { [events, exceptions] = await Promise.all([api(`/gsp/transport/tasks/${id}/events`), api(`/gsp/transport/tasks/${id}/exceptions`)]); } catch (e) { showToast(`运输任务明细加载失败：${e.message}`, 'error'); return; }
+    try { [events, exceptions] = await Promise.all([api(`/gsp/transport/tasks/${id}/events`), api(`/gsp/transport/tasks/${id}/exceptions`)]); } catch (e) { /* ignore */ }
     openModal({
         title: `运输任务详情 - ${t ? t.task_no : id}`,
         size: 'lg',
@@ -352,7 +355,7 @@ async function viewTask(id) {
             <div class="font-semibold text-sm mb-2">异常记录</div>
             <div class="table-wrap"><table class="data-table">
                 <thead><tr><th>分类</th><th>级别</th><th>描述</th><th>状态</th><th>决策</th><th class="actions">操作</th></tr></thead>
-                <tbody>${exceptions.map(x => `<tr><td>${esc(x.category)}</td><td>${badge(x.severity, x.severity === 'CRITICAL' || x.severity === 'HIGH' ? 'danger' : 'warning')}</td><td style="white-space:normal;max-width:220px">${esc(x.description)}</td><td>${statusBadge(x.status)}</td><td>${esc(x.decision || '-')}</td><td class="actions">${x.status === 'PENDING_QUALITY' ? `<button class="btn btn-link btn-sm" onclick="decideException(${x.id})"><i class="fa fa-gavel"></i> 决策</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6"><div class="empty-state">无异常</div></td></tr>'}</tbody></table></div>`,
+                <tbody>${exceptions.map(x => `<tr><td>${esc(x.category)}</td><td>${badge(x.severity, x.severity === 'CRITICAL' || x.severity === 'HIGH' ? 'danger' : 'warning')}</td><td style="white-space:normal;max-width:220px">${esc(x.description)}</td><td>${statusBadge(x.status)}</td><td>${esc(x.decision || '-')}</td><td class="actions">${x.status === 'PENDING_QUALITY' ? `<button class="btn btn-link btn-sm" onclick="PG('transport').decideException(${x.id})"><i class="fa fa-gavel"></i> 决策</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6"><div class="empty-state">无异常</div></td></tr>'}</tbody></table></div>`,
     });
 }
 function addEvent(taskId) {
@@ -509,3 +512,14 @@ function closeTask(taskId) {
         );
     });
 }
+
+    window.PAGES = window.PAGES || {};
+    window.PAGES['transport'] = {
+        title: '运输与签收',
+        icon: 'fa-truck',
+        desc: '承运商、运输任务与签收',
+        init: pageInit,
+        fn: { viewCarrier, decideCarrier, suspendCarrier, decideDoc, viewTask, addEvent, reportException, decideException, decideVehicle, decideDriver, recordDelivery, closeTask },
+    };
+    window.pageInit = pageInit; // 兼容直接访问旧页面 transport.html
+})();

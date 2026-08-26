@@ -1,17 +1,20 @@
-/* 审计追踪：哈希链审计事件 / 链校验 / 校验记录 */
-'use strict';
-window.PAGE_TITLE = '审计追踪';
-const content = () => document.getElementById('pageContent');
-let events = [];
-let verifications = [];
+/* 审计追踪：哈希链审计事件 / 链校验 / 校验记录
+ * SPA 模块：window.PAGES['audit'] = { title, icon, desc, init, fn } */
+(function () {
+    'use strict';
+    window.PAGE_TITLE = '审计追踪';
+    let _el = null;
+    const content = () => _el;
+    let events = [];
+    let verifications = [];
 
-window.pageInit = async function () {
-    render();
-    await load();
-};
+    async function pageInit(el) { _el = el || document.getElementById('pageContent');
+        render();
+        await load();
+    }
 
-function render() {
-    content().innerHTML = `
+    function render() {
+        content().innerHTML = `
         <div class="card">
             <div class="card-header">
                 <span class="card-title"><i class="fa fa-shield mr-2" style="color:var(--primary)"></i>审计事件（哈希链防篡改）</span>
@@ -52,32 +55,32 @@ function render() {
                 </table>
             </div>
         </div>`;
-    document.getElementById('auVerifyBtn').addEventListener('click', verifyChain);
-    document.getElementById('auRecordBtn').addEventListener('click', recordVerification);
-    document.getElementById('auSearchBtn').addEventListener('click', () => load(true));
-}
+        document.getElementById('auVerifyBtn').addEventListener('click', verifyChain);
+        document.getElementById('auRecordBtn').addEventListener('click', recordVerification);
+        document.getElementById('auSearchBtn').addEventListener('click', () => load(true));
+    }
 
-async function load(search) {
-    try {
-        const et = document.getElementById('auEntityType').value.trim();
-        const eid = document.getElementById('auEntityId').value.trim();
-        const limit = document.getElementById('auLimit').value;
-        const q = new URLSearchParams({ limit });
-        if (et) q.set('entity_type', et);
-        if (eid) q.set('entity_id', eid);
-        events = await api('/gsp/audit-events?' + q.toString());
-        verifications = await api('/gsp/audit-verifications');
-        renderEvents();
-        const tbody2 = document.querySelectorAll('#auBody')[0].closest('.card').nextElementSibling;
-        const vrows = verifications.map(v => `
+    async function load(search) {
+        try {
+            const et = document.getElementById('auEntityType').value.trim();
+            const eid = document.getElementById('auEntityId').value.trim();
+            const limit = document.getElementById('auLimit').value;
+            const q = new URLSearchParams({ limit });
+            if (et) q.set('entity_type', et);
+            if (eid) q.set('entity_id', eid);
+            events = await api('/gsp/audit-events?' + q.toString());
+            verifications = await api('/gsp/audit-verifications');
+            renderEvents();
+            const tbody2 = document.querySelectorAll('#auBody')[0].closest('.card').nextElementSibling;
+            const vrows = verifications.map(v => `
             <tr><td>${v.id}</td><td>${badge(v.trigger_source === 'MANUAL' ? '手工' : '计划任务', 'info')}</td><td>${esc(v.evidence_ref)}</td><td>${v.checked_event_count}</td><td>${v.valid ? badge('有效', 'success') : badge(`断裂@${v.broken_event_id}`, 'danger')}</td><td>${fmtDT(v.verified_at)}</td></tr>`).join('');
-        tbody2.querySelector('tbody').innerHTML = vrows || '<tr><td colspan="6"><div class="empty-state">暂无校验记录</div></td></tr>';
-    } catch (e) { showToast(e.message, 'error'); }
-}
+            tbody2.querySelector('tbody').innerHTML = vrows || '<tr><td colspan="6"><div class="empty-state">暂无校验记录</div></td></tr>';
+        } catch (e) { showToast(e.message, 'error'); }
+    }
 
-function renderEvents() {
-    const tbody = document.getElementById('auBody');
-    tbody.innerHTML = events.map(e => `
+    function renderEvents() {
+        const tbody = document.getElementById('auBody');
+        tbody.innerHTML = events.map(e => `
         <tr>
             <td>${e.id}</td>
             <td>${e.actor_user_id}</td>
@@ -87,41 +90,52 @@ function renderEvents() {
             <td class="text-xs" title="${esc(e.event_hash)}">${esc((e.event_hash || '').slice(0, 12))}…</td>
             <td>${fmtDT(e.occurred_at)}</td>
         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无审计事件</div></td></tr>';
-}
+    }
 
-async function verifyChain() {
-    try {
-        const r = await api('/gsp/audit-events/verify');
-        const modal = openModal({
-            title: '审计链校验结果', size: 'sm',
-            body: `
+    async function verifyChain() {
+        try {
+            const r = await api('/gsp/audit-events/verify');
+            const modal = openModal({
+                title: '审计链校验结果', size: 'sm',
+                body: `
                 <div class="text-center p-4">
                     <div style="font-size:40px;color:${r.valid ? 'var(--green-500)' : 'var(--red-500)'}"><i class="fa ${r.valid ? 'fa-check-circle' : 'fa-times-circle'}"></i></div>
                     <div class="text-lg font-bold mt-2" style="color:${r.valid ? 'var(--green-600)' : 'var(--red-600)'}">${r.valid ? '审计链完整有效' : '审计链已断裂'}</div>
                     ${r.broken_event_id ? `<div class="text-sm text-gray-500 mt-1">断裂事件ID：${r.broken_event_id}</div>` : ''}
                 </div>`,
-        });
-    } catch (e) { showToast(e.message, 'error'); }
-}
-function recordVerification() {
-    const modal = openModal({
-        title: '记录审计链校验结果', size: 'md',
-        body: `
+            });
+        } catch (e) { showToast(e.message, 'error'); }
+    }
+    function recordVerification() {
+        const modal = openModal({
+            title: '记录审计链校验结果', size: 'md',
+            body: `
             <div class="form-group"><label class="form-label">触发来源</label><select id="rvSrc" class="input-field"><option value="MANUAL">手工</option><option value="SCHEDULED">计划任务</option></select></div>
             <div class="form-group"><label class="form-label">证据引用 *（≥3字）</label><input id="rvEv" class="input-field"></div>
             <div class="form-group"><label class="form-label">登记原因 *（≥3字）</label><textarea id="rvReason" class="input-field" rows="2"></textarea></div>`,
-        footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="rvSubmit">保存</button>`,
-    });
-    modal.querySelector('#rvSubmit').addEventListener('click', async () => {
-        const body = {
-            trigger_source: modal.querySelector('#rvSrc').value,
-            evidence_ref: modal.querySelector('#rvEv').value.trim(),
-            reason: modal.querySelector('#rvReason').value.trim(),
-        };
-        if (!body.evidence_ref || body.reason.length < 3) { showToast('请完整填写', 'warning'); return; }
-        try {
-            await api('/gsp/audit-verifications', { method: 'POST', body });
-            closeModal(modal); showToast('校验记录已保存', 'success'); await load();
-        } catch (e) { showToast(e.message, 'error'); }
-    });
-}
+            footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="rvSubmit">保存</button>`,
+        });
+        modal.querySelector('#rvSubmit').addEventListener('click', async () => {
+            const body = {
+                trigger_source: modal.querySelector('#rvSrc').value,
+                evidence_ref: modal.querySelector('#rvEv').value.trim(),
+                reason: modal.querySelector('#rvReason').value.trim(),
+            };
+            if (!body.evidence_ref || body.reason.length < 3) { showToast('请完整填写', 'warning'); return; }
+            try {
+                await api('/gsp/audit-verifications', { method: 'POST', body });
+                closeModal(modal); showToast('校验记录已保存', 'success'); await load();
+            } catch (e) { showToast(e.message, 'error'); }
+        });
+    }
+
+    window.PAGES = window.PAGES || {};
+    window.PAGES['audit'] = {
+        title: '审计追踪',
+        icon: 'fa-shield',
+        desc: '哈希链审计追踪与校验',
+        init: pageInit,
+        fn: {},
+    };
+    window.pageInit = pageInit; // 兼容直接访问旧页面 audit.html
+})();

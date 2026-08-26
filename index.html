@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>药品GSP仓储与质量管理系统 - 登录</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-    <link rel="stylesheet" href="assets/css/main.css">
+    <link rel="stylesheet" href="assets/css/main.css?v=20260831">
 </head>
 <body>
     <div class="login-bg">
@@ -46,7 +46,7 @@
         </div>
     </div>
 
-    <script src="config.js"></script>
+    <script src="config.js?v=20260831"></script>
     <script>
         const API_BASE_URL = (window.WMS_CONFIG?.apiBaseUrl || '/api').replace(/\/+$/, '');
         const loginForm = document.getElementById('loginForm');
@@ -94,7 +94,7 @@
                 storage.setItem('user', JSON.stringify(data.user));
                 if (data.expiry) storage.setItem('token_expiry', data.expiry);
                 else if (remember) { const d = new Date(); d.setDate(d.getDate() + 7); storage.setItem('token_expiry', d.toISOString()); }
-                window.location.href = 'dashboard.html';
+                window.location.href = 'app.html';
             } catch (error) {
                 errorText.textContent = error.message;
                 errorMessage.classList.remove('hidden');
@@ -109,7 +109,7 @@
             const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
             if (token) {
                 const expiry = localStorage.getItem('token_expiry') || sessionStorage.getItem('token_expiry');
-                if (!expiry || new Date() < new Date(expiry)) window.location.href = 'dashboard.html';
+                if (!expiry || new Date() < new Date(expiry)) window.location.href = 'app.html';
             }
         })();
     </script>

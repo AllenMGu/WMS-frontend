@@ -8,6 +8,8 @@ const API_BASE_URL = (window.WMS_CONFIG?.apiBaseUrl || '/api').replace(/\/+$/, '
 let currentUser = null;
 let currentWarehouse = null;
 let currentGspRoles = new Set();
+let resolveAppShellReady;
+window.appShellReady = new Promise((resolve) => { resolveAppShellReady = resolve; });
 
 /* ----------------------------- 工具函数 ----------------------------- */
 function esc(value) {
@@ -145,6 +147,10 @@ async function apiAll(path, pageSize = 500) {
         if (page.length < pageSize) return items;
     }
 }
+function withReason(path, reason) {
+    const separator = path.includes('?') ? '&' : '?';
+    return `${path}${separator}reason=${encodeURIComponent(String(reason || '').trim())}`;
+}
 
 /* ----------------------------- 电子签名 ----------------------------- */
 async function createSignatureChallenge({ action, entity_type, entity_id, meaning, payload, reason, password }) {
@@ -227,7 +233,7 @@ function signAction(sigSpec, businessCall, title) {
         if (businessCall.onSuccess) {
             await businessCall.onSuccess(data);
         } else if (typeof window.pageInit === 'function') {
-            await window.pageInit();
+            await window.pageInit(document.getElementById('pageContent'));
         }
     });
 }
@@ -335,9 +341,10 @@ function boolBadge(v, yes = '是', no = '否') {
 /* ----------------------------- 岗位感知 ----------------------------- */
 const PAGE_ROLE_ACCESS = {
     'users.html': ['QUALITY_MANAGER'],
+    'ldap.html': ['SYSTEM_ADMIN', 'QUALITY_MANAGER'],
     'environment.html': ['ENVIRONMENT_MONITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
     'audit.html': ['AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
-    'operations.html': ['IT_ADMIN', 'AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
+    'operations.html': ['SYSTEM_ADMIN', 'AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
 };
 async function loadCurrentGspRoles() {
     const data = await api('/gsp/roles/me');
@@ -346,57 +353,73 @@ async function loadCurrentGspRoles() {
 function hasAnyGspRole(...roles) {
     const legacyRole = String(currentUser?.role?.value || currentUser?.role || '').toLowerCase();
     if (legacyRole === 'admin') return true;
-    if (!roles.length) return currentGspRoles.size > 0;
     return roles.some(role => currentGspRoles.has(role));
 }
 function canAccessPage(page) {
-    return hasAnyGspRole(...(PAGE_ROLE_ACCESS[page] || []));
+    const required = PAGE_ROLE_ACCESS[page];
+    return !required || hasAnyGspRole(...required);
 }
 
 /* ----------------------------- 布局 ----------------------------- */
 const NAV_GROUPS = [
     { title: '总览', items: [
+        { page: 'all', icon: 'fa-th-large', label: '全部功能' },
         { page: 'dashboard.html', icon: 'fa-dashboard', label: '合规概览' },
     ]},
-    { title: '质量主数据', items: [
+    { title: '基础档案 · 首营', items: [
         { page: 'goods.html', icon: 'fa-barcode', label: '货物管理' },
+        { page: 'warehouses.html', icon: 'fa-building', label: '仓库与库位' },
         { page: 'partners.html', icon: 'fa-handshake-o', label: '合作方管理' },
         { page: 'products.html', icon: 'fa-cubes', label: '药品与批次' },
-        { page: 'users.html', icon: 'fa-users', label: '用户与岗位' },
     ]},
-    { title: '业务闭环', items: [
+    { title: '购进与储存', items: [
         { page: 'procurement.html', icon: 'fa-arrow-down', label: '采购与收货' },
-        { page: 'sales.html', icon: 'fa-arrow-up', label: '销售与发运' },
-        { page: 'returns.html', icon: 'fa-undo', label: '销后退回' },
-        { page: 'recalls.html', icon: 'fa-bullhorn', label: '召回与演练' },
-    ]},
-    { title: '质量活动', items: [
         { page: 'maintenance.html', icon: 'fa-stethoscope', label: '药品养护' },
-        { page: 'stocktaking.html', icon: 'fa-list-alt', label: '批号库存盘点' },
-        { page: 'disposition.html', icon: 'fa-exclamation-triangle', label: '不合格品处置' },
-    ]},
-    { title: '物流与监测', items: [
-        { page: 'transport.html', icon: 'fa-truck', label: '运输与签收' },
         { page: 'environment.html', icon: 'fa-thermometer-half', label: '温湿度监测' },
+        { page: 'stocktaking.html', icon: 'fa-list-alt', label: '批号库存盘点' },
     ]},
-    { title: '合规与运维', items: [
+    { title: '销售与物流', items: [
+        { page: 'sales.html', icon: 'fa-arrow-up', label: '销售与发运' },
+        { page: 'transport.html', icon: 'fa-truck', label: '运输与签收' },
+    ]},
+    { title: '质量与售后', items: [
+        { page: 'returns.html', icon: 'fa-undo', label: '销后退回' },
+        { page: 'disposition.html', icon: 'fa-exclamation-triangle', label: '不合格品处置' },
+        { page: 'recalls.html', icon: 'fa-bullhorn', label: '召回与演练' },
+        { page: 'trace.html', icon: 'fa-search', label: '批号追溯' },
+    ]},
+    { title: '系统与合规', items: [
+        { page: 'users.html', icon: 'fa-users', label: '用户与岗位' },
+        { page: 'ldap.html', icon: 'fa-server', label: 'LDAP配置' },
         { page: 'signatures.html', icon: 'fa-pencil-square-o', label: '电子签名台账' },
         { page: 'audit.html', icon: 'fa-shield', label: '审计追踪' },
-        { page: 'trace.html', icon: 'fa-search', label: '批号追溯' },
         { page: 'operations.html', icon: 'fa-gears', label: '运维合规' },
     ]},
 ];
+/* 顶层 const 不会挂到 window，显式导出供 SPA 框架（app.js）引用 */
+window.NAV_GROUPS = NAV_GROUPS;
 function renderShell(activePage, pageTitle) {
     const shell = document.getElementById('appShell');
     if (!shell) return;
-    const sidebar = NAV_GROUPS.map(g => `
+    // iframe 嵌入模式（总目录页内加载子页面）：只渲染内容区，不渲染侧边栏/顶栏
+    let inIframe = false;
+    try { inIframe = window.self !== window.top; } catch (e) { inIframe = true; }
+    if (inIframe) {
+        shell.innerHTML = '<main class="page-content" id="pageContent"></main>';
+        return;
+    }
+    const sidebar = NAV_GROUPS.map(g => {
+        const visibleItems = g.items.filter(it => canAccessPage(it.page));
+        if (!visibleItems.length) return '';
+        return `
         <div class="nav-group">
             <div class="nav-group-title">${esc(g.title)}</div>
-            ${g.items.filter(it => canAccessPage(it.page)).map(it => `
-                <a href="${it.page}" class="nav-item ${activePage === it.page ? 'active' : ''}" data-route="${it.page}">
+            ${visibleItems.map(it => `
+                <a href="${it.page === 'all' ? 'app.html' : it.page}" class="nav-item ${activePage === it.page ? 'active' : ''}" data-route="${it.page}">
                     <i class="fa ${it.icon}"></i><span>${esc(it.label)}</span>
                 </a>`).join('')}
-        </div>`).join('');
+        </div>`;
+    }).join('');
     const initials = currentUser ? (currentUser.full_name || currentUser.username || 'U').charAt(0).toUpperCase() : 'U';
     const userName = currentUser ? (currentUser.full_name || currentUser.username) : '加载中...';
     shell.innerHTML = `
@@ -503,25 +526,43 @@ function optionHTML(items, valueKey, labelKey, placeholder) {
     return opts.join('');
 }
 
+/* ----------------------------- SPA 模块 ----------------------------- */
+/* 命名空间：PAGES[key] = { title, icon, desc, init, fn }，PG(key) 取模块的 fn（供 onclick 内联调用） */
+function PG(key) {
+    return (window.PAGES && window.PAGES[key] && window.PAGES[key].fn) || {};
+}
+
 /* ----------------------------- 页面引导 ----------------------------- */
 document.addEventListener('DOMContentLoaded', async function () {
     const auth = getStoredAuth();
-    if (!auth) { window.location.href = 'index.html'; return; }
+    if (!auth) {
+        resolveAppShellReady(false);
+        window.location.href = 'index.html';
+        return;
+    }
     try {
         currentUser = JSON.parse(auth.user);
     } catch (e) {
-        logout(); return;
+        resolveAppShellReady(false);
+        logout();
+        return;
     }
     const page = (window.location.pathname.split('/').pop() || 'index.html');
-    if (page === 'index.html') { window.location.href = 'dashboard.html'; return; }
+    if (page === 'index.html') {
+        resolveAppShellReady(false);
+        window.location.href = 'app.html';
+        return;
+    }
     try {
         await loadCurrentGspRoles();
     } catch (e) {
         showToast(e.message || '当前岗位加载失败', 'error');
+        resolveAppShellReady(false);
         return;
     }
     renderShell(page, window.PAGE_TITLE || '');
-    if (!canAccessPage(page)) {
+    resolveAppShellReady(true);
+    if (page !== 'app.html' && !canAccessPage(page)) {
         const pageContent = document.getElementById('pageContent');
         if (pageContent) pageContent.innerHTML = '<div class="alert alert-error"><i class="fa fa-lock mr-2"></i>当前账号没有访问该 GSP 模块的有效岗位。</div>';
         return;

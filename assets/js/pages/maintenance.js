@@ -1,13 +1,16 @@
-/* 药品养护：养护计划（制定→提交→质量批准→逐项检查→完成复核） */
-'use strict';
-window.PAGE_TITLE = '药品养护';
-const content = () => document.getElementById('pageContent');
+/* 药品养护：养护计划（制定→提交→质量批准→逐项检查→完成复核）
+ * SPA 模块：window.PAGES['maintenance'] = { title, icon, desc, init, fn } */
+(function () {
+    'use strict';
+    window.PAGE_TITLE = '药品养护';
+    let _el = null;
+    const content = () => _el;
 let plans = [];
 let batchStock = [];
 let warehouses = [];
 
-window.pageInit = async function () {
-    await Promise.all([refWarehouses(), refBatchStock(true)]).then(([w, s]) => { warehouses = w; batchStock = s; });
+async function pageInit(el) { _el = el || document.getElementById('pageContent');
+    await Promise.all([refWarehouses(), refBatchStock(true)]).then(([w, s]) => { warehouses = w; batchStock = s; }).catch(() => {});
     render();
     await load();
 };
@@ -47,10 +50,10 @@ function renderTable() {
             <td style="white-space:normal;max-width:260px">${esc(p.scope_summary)}</td>
             <td>${statusBadge(p.status)}</td>
             <td class="actions">
-                ${p.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="submitPlan(${p.id})"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
-                ${p.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="approvePlan(${p.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
-                ${p.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="viewItems(${p.id})"><i class="fa fa-search"></i> 检查</button>` : ''}
-                ${p.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="completePlan(${p.id})"><i class="fa fa-flag-checkered"></i> 完成</button>` : ''}
+                ${p.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('maintenance').submitPlan(${p.id})"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
+                ${p.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="PG('maintenance').approvePlan(${p.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
+                ${p.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="PG('maintenance').viewItems(${p.id})"><i class="fa fa-search"></i> 检查</button>` : ''}
+                ${p.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="PG('maintenance').completePlan(${p.id})"><i class="fa fa-flag-checkered"></i> 完成</button>` : ''}
             </td>
         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无养护计划</div></td></tr>';
 }
@@ -139,7 +142,7 @@ function viewItems(planId) {
                             <td>${statusBadge(i.status)}</td>
                             <td>${fmtD(i.next_due_on)}</td>
                             <td class="actions">
-                                ${['PENDING', 'DRAFT'].includes(i.status) ? `<button class="btn btn-link btn-sm" onclick="inspectItem(${planId}, ${i.id})"><i class="fa fa-stethoscope"></i> 检查</button>` : ''}
+                                ${['PENDING', 'DRAFT'].includes(i.status) ? `<button class="btn btn-link btn-sm" onclick="PG('maintenance').inspectItem(${planId}, ${i.id})"><i class="fa fa-stethoscope"></i> 检查</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">无明细</div></td></tr>'}</tbody>
                 </table>
@@ -210,3 +213,15 @@ function completePlan(id) {
         );
     });
 }
+
+
+    window.PAGES = window.PAGES || {};
+    window.PAGES['maintenance'] = {
+        title: '药品养护',
+        icon: 'fa-stethoscope',
+        desc: '药品养护计划与执行',
+        init: pageInit,
+        fn: { submitPlan, approvePlan, viewItems, inspectItem, completePlan },
+    };
+    window.pageInit = pageInit; // 兼容直接访问旧页面 maintenance.html
+})();
