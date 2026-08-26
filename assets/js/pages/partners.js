@@ -190,7 +190,7 @@
             </div>
             <div class="table-wrap">
                 <table class="data-table">
-                    <thead><tr><th>类型</th><th>编号</th><th>有效期</th><th>授权人员</th><th>上传人</th><th>核验人</th><th>状态</th><th class="actions">操作</th></tr></thead>
+                    <thead><tr><th>类型</th><th>编号</th><th>有效期</th><th>授权人员</th><th>岗位</th><th>上传人</th><th>核验人</th><th>状态</th><th class="actions">操作</th></tr></thead>
                     <tbody id="docBody"></tbody>
                 </table>
             </div>
@@ -204,13 +204,14 @@
                 <td>${esc(d.document_no)}</td>
                 <td>${fmtD(d.valid_to)}</td>
                 <td>${esc(d.person_name || '-')}</td>
+                <td>${esc(d.person_role || '-')}</td>
                 <td>用户 #${esc(d.created_by)}</td>
                 <td>${d.verified_by ? `用户 #${esc(d.verified_by)}` : '-'}</td>
                 <td>${statusBadge(d.status)}</td>
                 <td class="actions">
                     ${d.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('partners').verifyDoc(${id}, ${d.id})"><i class="fa fa-check-circle"></i> 核验</button>` : ''}
                 </td>
-            </tr>`).join('') : '<tr><td colspan="8"><div class="empty-state">暂无资质文件</div></td></tr>';
+            </tr>`).join('') : '<tr><td colspan="9"><div class="empty-state">暂无资质文件</div></td></tr>';
         };
         renderDocs();
         modal.querySelector('#addDocBtn').addEventListener('click', () => openDocModal(id, docs, renderDocs));
