@@ -200,9 +200,10 @@ async function renderBatches(box) {
         <div class="card">
             <div class="card-header">
                 <span class="card-title"><i class="fa fa-cubes mr-2" style="color:var(--primary)"></i>药品批次台账（含验收放行）</span>
-                <button class="btn btn-primary" id="newBatchBtn"><i class="fa fa-plus"></i> 新建批次</button>
+                ${badge('由采购收货自动生成', 'info')}
             </div>
             <div class="card-body">
+                <div class="alert alert-info mb-3">手工建档和手工放行已停用。批次必须由采购收货生成，并在收货明细中完成抽样和独立验收。</div>
                 <div class="filter-bar mb-3">
                     <input id="bSearch" class="input-field" placeholder="搜索批号/货物名">
                     <select id="bStatus" class="input-field">
@@ -219,7 +220,6 @@ async function renderBatches(box) {
                 </div>
             </div>
         </div>`;
-    box.querySelector('#newBatchBtn').addEventListener('click', openBatchModal);
     const searchEl = box.querySelector('#bSearch');
     const statusEl = box.querySelector('#bStatus');
     searchEl.addEventListener('input', debounce(() => renderBatchRows(batches, searchEl.value, statusEl.value), 250));
@@ -242,95 +242,22 @@ function renderBatchRows(batches, search, status) {
             <td>${esc(b.inspection_report_no || '-')}</td>
             <td>${esc(b.traceability_code || '-')}</td>
             <td>${statusBadge(b.status)}</td>
-            <td class="actions">
-                ${b.status === 'PENDING_INSPECTION' ? `<button class="btn btn-link btn-sm" onclick="PG('products').acceptBatch(${b.id})"><i class="fa fa-check-circle"></i> 验收放行</button>` : ''}
-            </td>
+            <td class="actions">-</td>
         </tr>`).join('') || '<tr><td colspan="9"><div class="empty-state">暂无批次</div></td></tr>';
-}
-
-function openBatchModal() {
-    const suppliers = partners.filter(p => ['SUPPLIER', 'BOTH'].includes(p.partner_type) && p.status === 'APPROVED');
-    const modal = openModal({
-        title: '新建批次（收货登记）',
-        size: 'lg',
-        body: `
-            <div class="form-row">
-                <div class="form-group"><label class="form-label">货物 *</label><select id="bGoods" class="input-field">${optionHTML(goodsList, 'id', g => `${g.name}（${g.spec || ''}）`, '请选择货物')}</select></div>
-                <div class="form-group"><label class="form-label">批号 *</label><input id="bNo" class="input-field"></div>
-            </div>
-            <div class="form-row">
-                <div class="form-group"><label class="form-label">生产日期 *</label><input type="date" id="bProd" class="input-field"></div>
-                <div class="form-group"><label class="form-label">有效期至 *</label><input type="date" id="bExp" class="input-field"></div>
-            </div>
-            <div class="form-row">
-                <div class="form-group"><label class="form-label">供货方 *（需为合格供货方）</label><select id="bSupplier" class="input-field">${optionHTML(suppliers, 'id', 'name', '请选择供货方')}</select></div>
-                <div class="form-group"><label class="form-label">收货单号 *</label><input id="bReceipt" class="input-field"></div>
-            </div>
-            <div class="form-row">
-                <div class="form-group"><label class="form-label">检验报告编号 *</label><input id="bInspect" class="input-field"></div>
-                <div class="form-group"><label class="form-label">追溯码</label><input id="bTrace" class="input-field"></div>
-            </div>
-            <div class="form-row">
-                <div class="form-group"><label class="form-label">到货温度(℃)</label><input type="number" step="0.1" id="bArrTemp" class="input-field"></div>
-                <div class="form-group"><label class="form-label">运输温度范围</label>
-                    <div class="flex gap-1"><input type="number" step="0.1" id="bTmin" class="input-field" placeholder="最低"><input type="number" step="0.1" id="bTmax" class="input-field" placeholder="最高"></div>
-                </div>
-            </div>
-            <div class="form-group"><label class="form-label">温度记录引用（冷藏/冷冻必填）</label><input id="bTempRef" class="input-field"></div>
-            <div class="form-group"><label class="form-label">登记原因 *（≥3字）</label><textarea id="bReason" class="input-field" rows="2"></textarea></div>
-        `,
-        footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="bSubmitBtn">保存</button>`,
-    });
-    modal.querySelector('#bSubmitBtn').addEventListener('click', async () => {
-        const body = {
-            goods_id: Number(modal.querySelector('#bGoods').value),
-            batch_no: modal.querySelector('#bNo').value.trim(),
-            production_date: modal.querySelector('#bProd').value,
-            expiry_date: modal.querySelector('#bExp').value,
-            supplier_id: Number(modal.querySelector('#bSupplier').value),
-            receipt_document_no: modal.querySelector('#bReceipt').value.trim(),
-            inspection_report_no: modal.querySelector('#bInspect').value.trim() || null,
-            traceability_code: modal.querySelector('#bTrace').value.trim() || null,
-            arrival_temperature: modal.querySelector('#bArrTemp').value === '' ? null : Number(modal.querySelector('#bArrTemp').value),
-            transport_temperature_min: modal.querySelector('#bTmin').value === '' ? null : Number(modal.querySelector('#bTmin').value),
-            transport_temperature_max: modal.querySelector('#bTmax').value === '' ? null : Number(modal.querySelector('#bTmax').value),
-            temperature_record_ref: modal.querySelector('#bTempRef').value.trim() || null,
-            reason: modal.querySelector('#bReason').value.trim(),
-        };
-        if (!body.goods_id || !body.batch_no || !body.production_date || !body.expiry_date || !body.supplier_id || !body.receipt_document_no || !body.inspection_report_no) { showToast('请填写必填项', 'warning'); return; }
-        if (body.reason.length < 3) { showToast('登记原因不能少于3个字', 'warning'); return; }
-        try {
-            await api('/gsp/batches', { method: 'POST', body });
-            closeModal(modal);
-            showToast('批次已登记，待独立验收放行', 'success');
-            await loadTab();
-        } catch (e) { showToast(e.message, 'error'); }
-    });
-}
-
-function acceptBatch(id) {
-    signAction(
-        { action: 'BATCH_ACCEPT', entity_type: 'GspDrugBatch', entity_id: id, meaning: 'CONFIRMATION' },
-        { path: `/gsp/batches/${id}/accept`, opts: { method: 'POST', body: { conclusion: '验收合格，同意放行', reason: '' } } },
-        '验收放行批次'
-    );
 }
 
 /* ---------------- 批号库存 ---------------- */
 async function renderStock(box) {
     const stock = await refBatchStock(true);
-    const warehouses = await refWarehouses();
-    const locations = await refLocations();
-    const batches = await refBatches(true);
-    const released = batches.filter(b => b.status === 'RELEASED');
     box.innerHTML = `
         <div class="card">
             <div class="card-header">
                 <span class="card-title"><i class="fa fa-database mr-2" style="color:var(--primary)"></i>批号库存（合格批次入库后形成）</span>
-                <button class="btn btn-primary" id="stockInBtn"><i class="fa fa-plus"></i> 批次入库</button>
+                ${badge('受控业务自动形成', 'info')}
             </div>
-            <div class="card-body p-0 table-wrap">
-                <table class="data-table">
+            <div class="card-body">
+                <div class="alert alert-info mb-3">禁止手工增加批号库存；库存只能由验收合格、销后退回检验合格或批准的盘点差异调整形成。</div>
+                <div class="table-wrap"><table class="data-table">
                     <thead><tr><th>批号</th><th>货物</th><th>仓库</th><th>库位</th><th>数量</th><th>预留</th><th>可用</th><th>状态</th></tr></thead>
                     <tbody>${stock.map(s => `
                         <tr>
@@ -342,49 +269,10 @@ async function renderStock(box) {
                             <td>${fmtNum(s.reserved_quantity)}</td>
                             <td class="font-medium">${fmtNum((Number(s.quantity) || 0) - (Number(s.reserved_quantity) || 0))}</td>
                             <td>${statusBadge(s.stock_status)}</td>
-                        </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无批号库存，先验收放行批次后再入库</div></td></tr>'}</tbody>
-                </table>
+                        </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无批号库存，请先完成受控采购收货验收</div></td></tr>'}</tbody>
+                </table></div>
             </div>
         </div>`;
-    box.querySelector('#stockInBtn').addEventListener('click', () => {
-        const modal = openModal({
-            title: '批次入库（形成可用库存）',
-            size: 'md',
-            body: `
-                <div class="form-group"><label class="form-label">批次 *（仅已放行）</label><select id="sBatch" class="input-field">${optionHTML(released, 'id', b => `${b.batch_no} - ${b.goods_name}`, '请选择批次')}</select></div>
-                <div class="form-row">
-                    <div class="form-group"><label class="form-label">仓库 *</label><select id="sWh" class="input-field">${optionHTML(warehouses, 'id', 'name', '请选择仓库')}</select></div>
-                    <div class="form-group"><label class="form-label">库位 *</label><select id="sLoc" class="input-field">${optionHTML(locations, 'id', l => `${l.location_code} - ${l.name || ''}`, '请选择库位')}</select></div>
-                </div>
-                <div class="form-group"><label class="form-label">数量 *</label><input type="number" step="0.001" min="0.001" id="sQty" class="input-field"></div>
-                <div class="form-group"><label class="form-label">入库原因 *（≥3字）</label><textarea id="sReason" class="input-field" rows="2"></textarea></div>
-            `,
-            footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="sSubmitBtn">入库</button>`,
-        });
-        const whSel = modal.querySelector('#sWh');
-        const locSel = modal.querySelector('#sLoc');
-        whSel.addEventListener('change', () => {
-            const whId = Number(whSel.value);
-            locSel.innerHTML = optionHTML(locations.filter(l => l.warehouse_id === whId), 'id', l => `${l.location_code} - ${l.name || ''}`, '请选择库位');
-        });
-        modal.querySelector('#sSubmitBtn').addEventListener('click', async () => {
-            const body = {
-                batch_id: Number(modal.querySelector('#sBatch').value),
-                warehouse_id: Number(whSel.value),
-                location_id: Number(locSel.value),
-                quantity: Number(modal.querySelector('#sQty').value),
-                reason: modal.querySelector('#sReason').value.trim(),
-            };
-            if (!body.batch_id || !body.warehouse_id || !body.location_id || !body.quantity || body.quantity <= 0) { showToast('请完整填写入库信息', 'warning'); return; }
-            if (body.reason.length < 3) { showToast('入库原因不能少于3个字', 'warning'); return; }
-            try {
-                await api('/gsp/batch-stock/receipt', { method: 'POST', body });
-                closeModal(modal);
-                showToast('入库成功', 'success');
-                await loadTab();
-            } catch (e) { showToast(e.message, 'error'); }
-        });
-    });
 }
 
 /* ---------------- 质量锁定 ---------------- */
@@ -467,7 +355,7 @@ function releaseHold(id) {
         icon: 'fa-cubes',
         desc: '药品质量档案、批次与批号库存',
         init: pageInit,
-        fn: { openProfileModal, approveProfile, acceptBatch, releaseHold },
+        fn: { openProfileModal, approveProfile, releaseHold },
     };
     window.pageInit = pageInit; // 兼容直接访问旧页面 products.html
 })();

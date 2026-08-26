@@ -48,6 +48,7 @@ if (errors.length === 0) {
   const recalls = readFileSync("assets/js/pages/recalls.js", "utf8");
   const environment = readFileSync("assets/js/pages/environment.js", "utf8");
   const procurement = readFileSync("assets/js/pages/procurement.js", "utf8");
+  const products = readFileSync("assets/js/pages/products.js", "utf8");
 
   const configIndex = appHtml.indexOf("config.js");
   const commonIndex = appHtml.indexOf("assets/js/common.js");
@@ -95,6 +96,12 @@ if (errors.length === 0) {
   }
   if (!procurement.includes("renderControlledReceiptPrint") || !procurement.includes("printWindow.print()")) {
     errors.push("收货受控打印未生成可打印副本");
+  }
+  if (products.includes("/gsp/batches', { method: 'POST'") || products.includes("/gsp/batch-stock/receipt")) {
+    errors.push("药品批次页面仍暴露手工批次建档或直接库存增加入口");
+  }
+  if (!products.includes("由采购收货自动生成") || !products.includes("批准的盘点差异调整")) {
+    errors.push("药品批次页面未说明受控批次和库存来源");
   }
 
   for (const name of modules) {
