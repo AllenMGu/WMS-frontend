@@ -189,6 +189,7 @@
                         traceability_verified: modal.querySelector('#riTrace').checked,
                         reason: conclusion,
                     } },
+                    successMessage: rejected > 0 ? '退回检验已保存；不合格批次已自动建立质量锁定' : '退回检验已保存',
                 },
                 '退回质量检验'
             );

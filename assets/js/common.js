@@ -229,7 +229,7 @@ function signAction(sigSpec, businessCall, title) {
             }
         }
         const data = await signAndCall(businessCall.path, { ...opts, body }, sigSpec, reason, password);
-        showToast('操作成功', 'success');
+        showToast(businessCall.successMessage || '操作成功', 'success');
         if (businessCall.onSuccess) {
             await businessCall.onSuccess(data);
         } else if (typeof window.pageInit === 'function') {
