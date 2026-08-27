@@ -24,6 +24,7 @@ window.HUB_DESCS = {
     'transport.html': '运输管理：在途运输、异常与签收',
     'returns.html': '售后管理：销后退回隔离与检验',
     'disposition.html': '质量管理：不合格品登记、批准与处置',
+    'qms.html': '质量体系：年度评审、风险/CAPA、培训、文件和设备验证',
     'recalls.html': '质量管理：药品召回与应急演练',
     'trace.html': '追溯管理：批号全链路追溯',
     'signatures.html': '数据完整性：电子签名台账与验签',

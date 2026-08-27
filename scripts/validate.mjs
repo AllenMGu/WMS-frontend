@@ -13,6 +13,7 @@ const modules = [
   "partners",
   "procurement",
   "products",
+  "qms",
   "recalls",
   "returns",
   "sales",

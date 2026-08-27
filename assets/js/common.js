@@ -345,6 +345,7 @@ const PAGE_ROLE_ACCESS = {
     'environment.html': ['ENVIRONMENT_MONITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
     'audit.html': ['AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
     'operations.html': ['SYSTEM_ADMIN', 'AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
+    'qms.html': ['AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
 };
 async function loadCurrentGspRoles() {
     const data = await api('/gsp/roles/me');
@@ -383,6 +384,7 @@ const NAV_GROUPS = [
         { page: 'transport.html', icon: 'fa-truck', label: '运输与签收' },
     ]},
     { title: '质量与售后', items: [
+        { page: 'qms.html', icon: 'fa-check-square-o', label: '质量体系管理' },
         { page: 'returns.html', icon: 'fa-undo', label: '销后退回' },
         { page: 'disposition.html', icon: 'fa-exclamation-triangle', label: '不合格品处置' },
         { page: 'recalls.html', icon: 'fa-bullhorn', label: '召回与演练' },

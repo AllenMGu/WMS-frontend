@@ -57,7 +57,7 @@ async function renderProfiles(box) {
             </div>
             <div class="card-body p-0 table-wrap">
                 <table class="data-table">
-                    <thead><tr><th>货物</th><th>批准文号</th><th>通用名</th><th>剂型</th><th>生产企业</th><th>储存条件</th><th>注册有效期</th><th>追溯要求</th><th>状态</th><th class="actions">操作</th></tr></thead>
+                    <thead><tr><th>货物</th><th>批准文号</th><th>通用名</th><th>剂型</th><th>生产企业</th><th>储存条件</th><th>监管类别</th><th>注册有效期</th><th>追溯要求</th><th>状态</th><th class="actions">操作</th></tr></thead>
                     <tbody>${profiles.map(p => `
                         <tr>
                             <td class="font-medium">${esc(p.goods_name)}</td>
@@ -66,6 +66,7 @@ async function renderProfiles(box) {
                             <td>${esc(p.dosage_form)}</td>
                             <td>${esc(p.manufacturer)}</td>
                             <td>${badge({ NORMAL: '常温', COOL: '阴凉', COLD: '冷藏', FROZEN: '冷冻', SPECIAL: '特殊' }[p.storage_condition] || p.storage_condition, p.storage_condition === 'NORMAL' ? 'info' : 'warning')}</td>
+                            <td>${badge({ GENERAL: '普通药品', SPECIAL_CONTROLLED: '特殊管理药品', VACCINE: '疫苗' }[p.regulatory_category] || p.regulatory_category, p.regulatory_category === 'GENERAL' ? 'gray' : 'danger')}</td>
                             <td>${fmtD(p.registration_valid_to)}</td>
                             <td>${boolBadge(p.traceability_required)}</td>
                             <td>${statusBadge(p.status)}</td>
@@ -73,7 +74,7 @@ async function renderProfiles(box) {
                                 <button class="btn btn-link btn-sm" onclick="PG('products').openProfileModal(${p.goods_id}, ${p.id})"><i class="fa fa-edit"></i> 编辑</button>
                                 ${p.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('products').approveProfile(${p.goods_id})"><i class="fa fa-check"></i> 批准</button>` : ''}
                             </td>
-                        </tr>`).join('') || '<tr><td colspan="10"><div class="empty-state">暂无品种档案</div></td></tr>'}</tbody>
+                        </tr>`).join('') || '<tr><td colspan="11"><div class="empty-state">暂无品种档案</div></td></tr>'}</tbody>
                 </table>
             </div>
             ${unprofiled.length ? `
@@ -122,13 +123,19 @@ function openProfileModal(goodsId, profileId) {
                 <div class="form-group"><label class="form-label">最低温度(℃)</label><input type="number" step="0.1" id="gMinT" class="input-field"></div>
                 <div class="form-group"><label class="form-label">最高温度(℃)</label><input type="number" step="0.1" id="gMaxT" class="input-field"></div>
             </div>
+            <div class="form-group"><label class="form-label">监管类别 *</label>
+                <select id="gCategory" class="input-field">
+                    <option value="GENERAL">普通药品</option>
+                    <option value="SPECIAL_CONTROLLED">特殊管理药品（需批准经营范围）</option>
+                    <option value="VACCINE">疫苗（需批准经营范围）</option>
+                </select>
+            </div>
             <div class="form-row">
                 <div class="form-group"><label class="form-label">注册文件引用 *</label><input id="gRegDoc" class="input-field"></div>
                 <div class="form-group"><label class="form-label">NMPA核验引用 *</label><input id="gNmpa" class="input-field"></div>
             </div>
             <div class="form-row">
                 <label class="checkbox-label"><input type="checkbox" id="gPresc" class="checkbox" checked> 处方药</label>
-                <label class="checkbox-label"><input type="checkbox" id="gSpecial" class="checkbox"> 特殊管制</label>
                 <label class="checkbox-label"><input type="checkbox" id="gTrace" class="checkbox" checked> 必须追溯</label>
             </div>
             <div class="form-group"><label class="form-label">变更原因 *（≥3字）</label><textarea id="gReason" class="input-field" rows="2"></textarea></div>
@@ -150,7 +157,7 @@ function openProfileModal(goodsId, profileId) {
         modal.querySelector('#gRegDoc').value = profile.registration_document_ref || '';
         modal.querySelector('#gNmpa').value = profile.nmpa_verification_ref || '';
         modal.querySelector('#gPresc').checked = !!profile.is_prescription;
-        modal.querySelector('#gSpecial').checked = !!profile.is_special_controlled;
+        modal.querySelector('#gCategory').value = profile.regulatory_category || (profile.is_special_controlled ? 'SPECIAL_CONTROLLED' : 'GENERAL');
         modal.querySelector('#gTrace').checked = !!profile.traceability_required;
     } else if (goodsId) {
         modal.querySelector('#gGoods').value = goodsId;
@@ -167,7 +174,8 @@ function openProfileModal(goodsId, profileId) {
             min_temperature: modal.querySelector('#gMinT').value === '' ? null : Number(modal.querySelector('#gMinT').value),
             max_temperature: modal.querySelector('#gMaxT').value === '' ? null : Number(modal.querySelector('#gMaxT').value),
             is_prescription: modal.querySelector('#gPresc').checked,
-            is_special_controlled: modal.querySelector('#gSpecial').checked,
+            is_special_controlled: modal.querySelector('#gCategory').value !== 'GENERAL',
+            regulatory_category: modal.querySelector('#gCategory').value,
             traceability_required: modal.querySelector('#gTrace').checked,
             registration_valid_to: modal.querySelector('#gRegTo').value || null,
             registration_document_ref: modal.querySelector('#gRegDoc').value.trim(),
