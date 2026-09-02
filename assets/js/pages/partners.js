@@ -6,6 +6,8 @@
     let _el = null;
     const content = () => _el;
     let partners = [];
+    let goodsList = [];
+    let productProfiles = [];
     let currentFilter = { partner_type: '', status: '' };
 
     async function pageInit(el) { _el = el || document.getElementById('pageContent');
@@ -54,7 +56,11 @@
 
     async function load(force) {
         try {
-            partners = await refPartners(force);
+            [partners, goodsList, productProfiles] = await Promise.all([
+                refPartners(force),
+                refGoods(force),
+                api('/gsp/products?limit=5000'),
+            ]);
             renderTable();
         } catch (e) { showToast(e.message, 'error'); }
     }
@@ -80,7 +86,7 @@
             <td>${p.approved_by ? `用户 #${esc(p.approved_by)}` : '-'}</td>
             <td>${statusBadge(p.status)}</td>
             <td class="actions">
-                <button class="btn btn-link btn-sm" onclick="PG('partners').viewPartner(${p.id})"><i class="fa fa-folder-open-o"></i> 资质</button>
+                <button class="btn btn-link btn-sm" onclick="PG('partners').viewPartner(${p.id})"><i class="fa fa-folder-open-o"></i> 资质/品种</button>
                 ${p.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('partners').approvePartner(${p.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
                 ${p.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="PG('partners').suspendPartner(${p.id})"><i class="fa fa-pause"></i> 暂停</button>` : ''}
             </td>
@@ -160,7 +166,13 @@
     async function viewPartner(id) {
         const p = partners.find(x => x.id === id);
         let docs = [];
-        try { docs = await api(`/gsp/partners/${id}/documents`); } catch (e) { docs = []; }
+        let authorizations = [];
+        try {
+            [docs, authorizations] = await Promise.all([
+                api(`/gsp/partners/${id}/documents`),
+                ['SUPPLIER', 'BOTH'].includes(p.partner_type) ? api(`/gsp/partners/${id}/products`) : Promise.resolve([]),
+            ]);
+        } catch (e) { docs = []; authorizations = []; }
         // 该类型合作方批准所需的已核验文件清单
         const required = p.partner_type === 'SUPPLIER' ? ['BUSINESS_LICENSE', 'DRUG_LICENSE', 'QUALITY_AGREEMENT', 'SALES_AUTHORIZATION']
             : p.partner_type === 'CUSTOMER' ? ['BUSINESS_LICENSE', 'DRUG_LICENSE', 'PROCUREMENT_AUTHORIZATION']
@@ -194,6 +206,13 @@
                     <tbody id="docBody"></tbody>
                 </table>
             </div>
+            ${['SUPPLIER', 'BOTH'].includes(p.partner_type) ? `
+            <div class="flex items-center justify-between mt-4 mb-2">
+                <span class="font-semibold text-sm">获准供货品种目录</span>
+                <button class="btn btn-primary btn-sm" id="addSupplierProductBtn"><i class="fa fa-plus"></i> 关联供货品种</button>
+            </div>
+            <div class="alert alert-warning mb-2">供应商和品种分别首营通过后，仍必须由质量人员独立批准该关联；未批准、暂停或过期的关联不能采购、收货或验收。</div>
+            <div class="table-wrap"><table class="data-table"><thead><tr><th>货物</th><th>批准文号</th><th>生产厂家</th><th>授权范围</th><th>有效期</th><th>维护/批准人</th><th>状态</th><th class="actions">操作</th></tr></thead><tbody id="supplierProductBody"></tbody></table></div>` : ''}
         `,
         });
         const renderDocs = () => {
@@ -215,7 +234,56 @@
         };
         renderDocs();
         modal.querySelector('#addDocBtn').addEventListener('click', () => openDocModal(id, docs, renderDocs));
+        if (['SUPPLIER', 'BOTH'].includes(p.partner_type)) {
+            const renderAuthorizations = () => {
+                const tbody = modal.querySelector('#supplierProductBody');
+                tbody.innerHTML = authorizations.length ? authorizations.map(a => {
+                    const goods = goodsList.find(g => g.id === a.goods_id);
+                    const profile = productProfiles.find(x => x.goods_id === a.goods_id);
+                    return `<tr><td>${esc(goods ? `${goods.name}（${goods.spec || ''}）` : `货物 #${a.goods_id}`)}</td><td>${esc(profile?.approval_no || '-')}</td><td>${esc(profile?.manufacturer || '-')}</td><td>${esc(a.scope_description)}</td><td>${fmtD(a.valid_from)} ~ ${fmtD(a.valid_to)}</td><td>#${a.updated_by} / ${a.approved_by ? `#${a.approved_by}` : '-'}</td><td>${statusBadge(a.status)}</td><td class="actions">${a.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('partners').approveSupplierProduct(${id}, ${a.id})">批准</button>` : ''}${a.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="PG('partners').suspendSupplierProduct(${id}, ${a.id})">暂停</button>` : ''}<button class="btn btn-link btn-sm" onclick="PG('partners').editSupplierProduct(${id}, ${a.goods_id})">更新</button></td></tr>`;
+                }).join('') : '<tr><td colspan="8"><div class="empty-state">尚未建立供货品种目录；该供应商不能用于药品采购</div></td></tr>';
+            };
+            renderAuthorizations();
+            modal.querySelector('#addSupplierProductBtn').addEventListener('click', () => openSupplierProductModal(id));
+        }
     }
+
+    function openSupplierProductModal(partnerId, goodsId = null) {
+        const eligibleProfiles = productProfiles.filter(p => p.status === 'APPROVED');
+        const choices = eligibleProfiles.map(p => {
+            const goods = goodsList.find(g => g.id === p.goods_id);
+            return { id: p.goods_id, label: `${goods?.name || p.generic_name}（${goods?.spec || ''}）· ${p.approval_no}` };
+        });
+        const modal = openModal({
+            title: goodsId ? '更新供货品种授权' : '关联供应商供货品种', size: 'lg',
+            body: `<div class="form-row"><div class="form-group"><label class="form-label">已批准药品品种 *</label><select id="spaGoods" class="input-field" ${goodsId ? 'disabled' : ''}>${optionHTML(choices, 'id', 'label', '请选择品种')}</select></div><div class="form-group"><label class="form-label">授权文件引用 *</label><input id="spaRef" class="input-field"></div></div><div class="form-group"><label class="form-label">授权范围说明 *</label><textarea id="spaScope" class="input-field" placeholder="例如：仅允许供应该批准文号、生产厂家及当前规格"></textarea></div><div class="form-row"><div class="form-group"><label class="form-label">生效日期 *</label><input type="date" id="spaFrom" class="input-field" value="${todayISO()}"></div><div class="form-group"><label class="form-label">有效期至 *</label><input type="date" id="spaTo" class="input-field"></div></div><div class="form-row"><div class="form-group"><label class="form-label">文件 SHA-256 *</label><input id="spaHash" maxlength="64" class="input-field"></div><div class="form-group"><label class="form-label">文件大小（字节）*</label><input type="number" min="1" id="spaSize" class="input-field"></div></div><div class="form-group"><label class="form-label">维护原因 *</label><textarea id="spaReason" class="input-field"></textarea></div>`,
+            footer: '<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="spaSubmit">保存并待独立审批</button>',
+        });
+        if (goodsId) modal.querySelector('#spaGoods').value = goodsId;
+        modal.querySelector('#spaSubmit').addEventListener('click', async () => {
+            const body = { goods_id: Number(modal.querySelector('#spaGoods').value), authorization_ref: modal.querySelector('#spaRef').value.trim(), authorization_sha256: modal.querySelector('#spaHash').value.trim().toLowerCase(), authorization_size_bytes: Number(modal.querySelector('#spaSize').value), scope_description: modal.querySelector('#spaScope').value.trim(), valid_from: modal.querySelector('#spaFrom').value, valid_to: modal.querySelector('#spaTo').value, reason: modal.querySelector('#spaReason').value.trim() };
+            if (!body.goods_id || body.authorization_ref.length < 3 || body.scope_description.length < 3 || !body.valid_from || !body.valid_to || !/^[0-9a-f]{64}$/.test(body.authorization_sha256) || body.authorization_size_bytes < 1 || body.reason.length < 3) return showToast('请完整填写授权范围、有效期和文件完整性证据', 'warning');
+            try { await api(`/gsp/partners/${partnerId}/products`, { method: 'POST', body }); document.querySelectorAll('.modal').forEach(closeModal); showToast('供货品种关联已保存，等待独立质量批准', 'success'); await load(true); } catch (e) { showToast(e.message, 'error'); }
+        });
+    }
+
+    function approveSupplierProduct(partnerId, authorizationId) {
+        signAction(
+            { action: 'SUPPLIER_PRODUCT_APPROVE', entity_type: 'GspSupplierProductAuthorization', entity_id: authorizationId, meaning: 'APPROVAL' },
+            { path: `/gsp/partners/${partnerId}/products/${authorizationId}/approve`, opts: { method: 'POST', body: { reason: '' } }, successMessage: '供应商供货品种已批准', onSuccess: async () => { document.querySelectorAll('.modal').forEach(closeModal); await load(true); } },
+            '批准供应商供货品种'
+        );
+    }
+
+    function suspendSupplierProduct(partnerId, authorizationId) {
+        signAction(
+            { action: 'SUPPLIER_PRODUCT_SUSPEND', entity_type: 'GspSupplierProductAuthorization', entity_id: authorizationId, meaning: 'RESPONSIBILITY' },
+            { path: `/gsp/partners/${partnerId}/products/${authorizationId}/suspend`, opts: { method: 'POST', body: { reason: '' } }, successMessage: '该供应商品种供货权限已暂停', onSuccess: async () => { document.querySelectorAll('.modal').forEach(closeModal); await load(true); } },
+            '暂停供应商供货品种'
+        );
+    }
+
+    function editSupplierProduct(partnerId, goodsId) { openSupplierProductModal(partnerId, goodsId); }
 
     function openDocModal(partnerId, docs, onAdd) {
         const modal = openModal({
@@ -284,7 +352,7 @@
         icon: 'fa-handshake-o',
         desc: '供货方/购货方资质建档与核验',
         init: pageInit,
-        fn: { viewPartner, approvePartner, suspendPartner, verifyDoc },
+        fn: { viewPartner, approvePartner, suspendPartner, verifyDoc, approveSupplierProduct, suspendSupplierProduct, editSupplierProduct },
     };
     window.pageInit = pageInit; // 兼容直接访问旧页面 partners.html
 })();

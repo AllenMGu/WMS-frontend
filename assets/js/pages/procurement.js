@@ -15,7 +15,7 @@
 
     async function pageInit(el) { _el = el || document.getElementById('pageContent');
         await Promise.all([refGoods(), refPartners(), refWarehouses(), refLocations()]).then(([g, p, w, l]) => {
-            goodsList = g; suppliers = p.filter(x => ['SUPPLIER', 'BOTH'].includes(x.partner_type)); warehouses = w; locations = l;
+            goodsList = g; suppliers = p.filter(x => ['SUPPLIER', 'BOTH'].includes(x.partner_type) && x.status === 'APPROVED'); warehouses = w; locations = l;
         }).catch(() => {});
         render();
         await loadTab();
@@ -93,17 +93,21 @@
                 <span class="font-semibold text-sm">订单明细</span>
                 <button type="button" class="btn btn-secondary btn-sm" id="poAddItem"><i class="fa fa-plus"></i> 添加行</button>
             </div>
+            <div class="alert alert-info mb-2" id="poScopeHint">请先选择供货方；产品清单只显示该供应商已独立批准且在有效期内的供货品种。</div>
             <div id="poItems"></div>
             <div class="form-group"><label class="form-label">制单原因 *（≥3字）</label><textarea id="poReason" class="input-field" rows="2"></textarea></div>
         `,
             footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="poSubmitBtn">保存草稿</button>`,
         });
         const itemsBox = modal.querySelector('#poItems');
+        const supplierSelect = modal.querySelector('#poSupplier');
+        let authorizedGoods = [];
         const addRow = (goodsId) => {
+            if (!authorizedGoods.length) { showToast('该供应商没有有效的获准供货品种', 'warning'); return; }
             const row = document.createElement('div');
             row.className = 'flex gap-2 mb-2';
             row.innerHTML = `
-            <select class="input-field po-goods" style="flex:2">${optionHTML(goodsList, 'id', g => `${g.name}（${g.spec || ''}）`, '选择货物')}</select>
+            <select class="input-field po-goods" style="flex:2">${optionHTML(authorizedGoods, 'id', g => `${g.name}（${g.spec || ''}）`, '选择获准供货品种')}</select>
             <input class="input-field po-qty" type="number" step="0.001" min="0.001" placeholder="数量" style="flex:1">
             <input class="input-field po-unit" placeholder="单位" value="盒" style="flex:1">
             <button type="button" class="btn btn-danger btn-sm po-del"><i class="fa fa-trash"></i></button>`;
@@ -111,7 +115,19 @@
             row.querySelector('.po-del').addEventListener('click', () => row.remove());
             itemsBox.appendChild(row);
         };
-        addRow();
+        const loadAuthorizedGoods = async () => {
+            itemsBox.innerHTML = '';
+            const supplierId = Number(supplierSelect.value);
+            if (!supplierId) { authorizedGoods = []; modal.querySelector('#poScopeHint').textContent = '请先选择供货方；产品清单只显示该供应商已独立批准且在有效期内的供货品种。'; return; }
+            try {
+                const authorizations = await api(`/gsp/partners/${supplierId}/products?effective_only=true`);
+                const allowed = new Set(authorizations.map(a => a.goods_id));
+                authorizedGoods = goodsList.filter(g => allowed.has(g.id));
+                modal.querySelector('#poScopeHint').textContent = authorizedGoods.length ? `当前供应商共有 ${authorizedGoods.length} 个有效获准供货品种。` : '当前供应商没有有效获准供货品种，不能建立采购订单。';
+                if (authorizedGoods.length) addRow();
+            } catch (e) { authorizedGoods = []; showToast(e.message, 'error'); }
+        };
+        supplierSelect.addEventListener('change', loadAuthorizedGoods);
         modal.querySelector('#poAddItem').addEventListener('click', () => addRow());
         modal.querySelector('#poSubmitBtn').addEventListener('click', async () => {
             const items = [...itemsBox.querySelectorAll('.po-goods')].map((sel, i) => ({
