@@ -345,15 +345,18 @@ const PAGE_ROLE_ACCESS = {
     'environment.html': ['ENVIRONMENT_MONITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
     'audit.html': ['AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
     'operations.html': ['SYSTEM_ADMIN', 'AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
-    'qms.html': ['AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
+    'qms.html': ['GSP_ROLE_ONLY', 'AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
+    'my-training.html': ['ANY_GSP_ROLE'],
 };
 async function loadCurrentGspRoles() {
     const data = await api('/gsp/roles/me');
     currentGspRoles = new Set(data?.roles || []);
 }
 function hasAnyGspRole(...roles) {
+    if (roles.includes('ANY_GSP_ROLE')) return currentGspRoles.size > 0;
+    const gspOnly = roles.includes('GSP_ROLE_ONLY');
     const legacyRole = String(currentUser?.role?.value || currentUser?.role || '').toLowerCase();
-    if (legacyRole === 'admin') return true;
+    if (!gspOnly && legacyRole === 'admin') return true;
     return roles.some(role => currentGspRoles.has(role));
 }
 function canAccessPage(page) {
@@ -384,6 +387,7 @@ const NAV_GROUPS = [
         { page: 'transport.html', icon: 'fa-truck', label: '运输与签收' },
     ]},
     { title: '质量与售后', items: [
+        { page: 'my-training.html', icon: 'fa-graduation-cap', label: '我的培训' },
         { page: 'qms.html', icon: 'fa-check-square-o', label: '质量体系管理' },
         { page: 'returns.html', icon: 'fa-undo', label: '销后退回' },
         { page: 'disposition.html', icon: 'fa-exclamation-triangle', label: '不合格品处置' },
@@ -488,6 +492,11 @@ async function refUsers(force) {
     if (!force && refCache.users) return refCache.users;
     refCache.users = await api('/users/');
     return refCache.users;
+}
+async function refQualityUsers(force) {
+    if (!force && refCache.qualityUsers) return refCache.qualityUsers;
+    refCache.qualityUsers = await api('/gsp/reference/users');
+    return refCache.qualityUsers;
 }
 async function refPartners(force) {
     if (!force && refCache.partners) return refCache.partners;

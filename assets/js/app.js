@@ -4,7 +4,7 @@
  * "全部功能" -> 在内容区渲染全目录按钮网格，点击按钮原地加载对应模块。
  * ========================================================================== */
 'use strict';
-const APP_VERSION = '20260831';
+const APP_VERSION = '20260902';
 const content = () => document.getElementById('pageContent');
 const loaded = new Set();
 
@@ -24,6 +24,7 @@ window.HUB_DESCS = {
     'transport.html': '运输管理：在途运输、异常与签收',
     'returns.html': '售后管理：销后退回隔离与检验',
     'disposition.html': '质量管理：不合格品登记、批准与处置',
+    'my-training.html': '个人培训：查看并确认本人培训与岗位考核记录',
     'qms.html': '质量体系：年度评审、风险/CAPA、培训、文件和设备验证',
     'recalls.html': '质量管理：药品召回与应急演练',
     'trace.html': '追溯管理：批号全链路追溯',
