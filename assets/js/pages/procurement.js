@@ -343,6 +343,7 @@
                 {
                     path: `/gsp/receiving/receipts/${receiptId}/items/${itemId}/inspect`,
                     opts: { method: 'POST', body: { accepted_quantity: accepted, rejected_quantity: rejected, conclusion, reason: conclusion } },
+                    successMessage: rejected > 0 ? '验收已保存；拒收批次已自动建立质量锁定' : '验收已保存',
                 },
                 '独立验收收货明细'
             );

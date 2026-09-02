@@ -39,7 +39,7 @@
                 <div class="table-wrap">
                     <table class="data-table" id="partnerTable">
                         <thead><tr>
-                            <th>编码</th><th>名称</th><th>类型</th><th>许可证号</th><th>许可证有效期</th><th>质量协议有效期</th><th>状态</th><th class="actions">操作</th>
+                            <th>编码</th><th>名称</th><th>类型</th><th>许可证号</th><th>许可证有效期</th><th>质量协议有效期</th><th>建档人</th><th>审批人</th><th>状态</th><th class="actions">操作</th>
                         </tr></thead>
                         <tbody id="partnerBody"></tbody>
                     </table>
@@ -65,7 +65,7 @@
             (!currentFilter.status || p.status === currentFilter.status));
         const tbody = document.getElementById('partnerBody');
         if (!rows.length) {
-            tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">暂无合作方，点击右上角新建</div></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state">暂无合作方，点击右上角新建</div></td></tr>';
             return;
         }
         tbody.innerHTML = rows.map(p => `
@@ -76,6 +76,8 @@
             <td>${esc(p.license_no)}</td>
             <td>${fmtD(p.license_valid_to)} ${p.license_valid_to && new Date(p.license_valid_to) < new Date() ? badge('已过期', 'danger') : ''}</td>
             <td>${fmtD(p.quality_agreement_valid_to)}</td>
+            <td>用户 #${esc(p.created_by)}</td>
+            <td>${p.approved_by ? `用户 #${esc(p.approved_by)}` : '-'}</td>
             <td>${statusBadge(p.status)}</td>
             <td class="actions">
                 <button class="btn btn-link btn-sm" onclick="PG('partners').viewPartner(${p.id})"><i class="fa fa-folder-open-o"></i> 资质</button>
@@ -175,10 +177,12 @@
                 <div class="kv"><span class="kv-label">许可证有效期</span><span>${fmtD(p.license_valid_from)} ~ ${fmtD(p.license_valid_to)}</span></div>
                 <div class="kv"><span class="kv-label">经营范围</span><span class="break-all">${esc(p.license_scope)}</span></div>
                 <div class="kv"><span class="kv-label">状态</span><span>${statusBadge(p.status)}</span></div>
+                <div class="kv"><span class="kv-label">首营建档人</span><span>用户 #${esc(p.created_by)}</span></div>
+                <div class="kv"><span class="kv-label">质量审批人</span><span>${p.approved_by ? `用户 #${esc(p.approved_by)}` : '待审批'}</span></div>
                 ${p.suspension_reason ? `<div class="kv"><span class="kv-label">暂停原因</span><span>${esc(p.suspension_reason)}</span></div>` : ''}
             </div>
             <div class="alert alert-info mb-3"><i class="fa fa-info-circle mr-2"></i>
-                批准前必须<b>录入并核验通过</b>以下文件：${required.map(t => `${docTypeLabel(t)} ${verifiedTypes.has(t) ? '<span class="badge badge-success">已核验</span>' : '<span class="badge badge-danger">缺</span>'}`).join(' ')}
+                批准前必须<b>录入并核验通过</b>以下文件，且首营建档人与质量审批人、文件上传人与核验人必须分别由不同用户承担：${required.map(t => `${docTypeLabel(t)} ${verifiedTypes.has(t) ? '<span class="badge badge-success">已核验</span>' : '<span class="badge badge-danger">缺</span>'}`).join(' ')}
             </div>
             <div class="flex items-center justify-between mb-2">
                 <span class="font-semibold text-sm">资质文件清单</span>
@@ -186,7 +190,7 @@
             </div>
             <div class="table-wrap">
                 <table class="data-table">
-                    <thead><tr><th>类型</th><th>编号</th><th>有效期</th><th>授权人员</th><th>岗位</th><th>状态</th><th class="actions">操作</th></tr></thead>
+                    <thead><tr><th>类型</th><th>编号</th><th>有效期</th><th>授权人员</th><th>岗位</th><th>上传人</th><th>核验人</th><th>状态</th><th class="actions">操作</th></tr></thead>
                     <tbody id="docBody"></tbody>
                 </table>
             </div>
@@ -201,11 +205,13 @@
                 <td>${fmtD(d.valid_to)}</td>
                 <td>${esc(d.person_name || '-')}</td>
                 <td>${esc(d.person_role || '-')}</td>
+                <td>用户 #${esc(d.created_by)}</td>
+                <td>${d.verified_by ? `用户 #${esc(d.verified_by)}` : '-'}</td>
                 <td>${statusBadge(d.status)}</td>
                 <td class="actions">
                     ${d.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('partners').verifyDoc(${id}, ${d.id})"><i class="fa fa-check-circle"></i> 核验</button>` : ''}
                 </td>
-            </tr>`).join('') : '<tr><td colspan="7"><div class="empty-state">暂无资质文件</div></td></tr>';
+            </tr>`).join('') : '<tr><td colspan="9"><div class="empty-state">暂无资质文件</div></td></tr>';
         };
         renderDocs();
         modal.querySelector('#addDocBtn').addEventListener('click', () => openDocModal(id, docs, renderDocs));
