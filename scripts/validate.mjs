@@ -51,6 +51,7 @@ if (errors.length === 0) {
   const recalls = readFileSync("assets/js/pages/recalls.js", "utf8");
   const environment = readFileSync("assets/js/pages/environment.js", "utf8");
   const procurement = readFileSync("assets/js/pages/procurement.js", "utf8");
+  const partners = readFileSync("assets/js/pages/partners.js", "utf8");
   const products = readFileSync("assets/js/pages/products.js", "utf8");
   const qms = readFileSync("assets/js/pages/qms.js", "utf8");
   const myTraining = readFileSync("assets/js/pages/my-training.js", "utf8");
@@ -123,6 +124,12 @@ if (errors.length === 0) {
   }
   if (!procurement.includes("renderControlledReceiptPrint") || !procurement.includes("printWindow.print()")) {
     errors.push("收货受控打印未生成可打印副本");
+  }
+  if (!partners.includes("/products") || !partners.includes("approveSupplierProduct") || !partners.includes("suspendSupplierProduct")) {
+    errors.push("首营管理未覆盖供应商供货品种关联、批准或暂停闭环");
+  }
+  if (!procurement.includes("products?effective_only=true") || !procurement.includes("authorizedGoods")) {
+    errors.push("采购建单未按供应商有效供货品种目录过滤产品");
   }
   if (products.includes("/gsp/batches', { method: 'POST'") || products.includes("/gsp/batch-stock/receipt")) {
     errors.push("药品批次页面仍暴露手工批次建档或直接库存增加入口");
