@@ -8,6 +8,7 @@ const modules = [
   "environment",
   "goods",
   "ldap",
+  "legacy-archive",
   "maintenance",
   "my-training",
   "operations",
@@ -53,6 +54,7 @@ if (errors.length === 0) {
   const products = readFileSync("assets/js/pages/products.js", "utf8");
   const qms = readFileSync("assets/js/pages/qms.js", "utf8");
   const myTraining = readFileSync("assets/js/pages/my-training.js", "utf8");
+  const legacyArchive = readFileSync("assets/js/pages/legacy-archive.js", "utf8");
 
   const configIndex = appHtml.indexOf("config.js");
   const commonIndex = appHtml.indexOf("assets/js/common.js");
@@ -88,6 +90,15 @@ if (errors.length === 0) {
   }
   if (!myTraining.includes("/gsp/quality-system/training/me") || !myTraining.includes("/complete")) {
     errors.push("本人培训页面未接入本人查询或完成确认接口");
+  }
+  if (!myTraining.includes("/gsp/quality-system/capas/me") || !myTraining.includes("/implement")) {
+    errors.push("我的质量任务页面未接入本人 CAPA 查询或完成证据接口");
+  }
+  if (!common.includes("'legacy-archive.html': ['SYSTEM_ADMIN', 'AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER']")) {
+    errors.push("老 GSP 历史归档页面缺少受控岗位限制");
+  }
+  if (!legacyArchive.includes("/gsp/legacy-archive/batches") || !legacyArchive.includes("/reconcile") || !legacyArchive.includes("/export")) {
+    errors.push("老 GSP 历史归档页面未覆盖迁移、核对或导出闭环");
   }
   if (!common.includes("window.appShellReady") || !app.includes("await window.appShellReady")) {
     errors.push("SPA 启动未等待认证和岗位加载完成");
