@@ -35,7 +35,7 @@
 
     async function load() {
         try {
-            signatures = await api('/gsp/electronic-signatures?limit=200');
+            signatures = await apiAll('/gsp/electronic-signatures');
             renderTable();
         } catch (e) { showToast(e.message, 'error'); }
     }

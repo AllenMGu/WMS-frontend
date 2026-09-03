@@ -4,7 +4,7 @@
  * "全部功能" -> 在内容区渲染全目录按钮网格，点击按钮原地加载对应模块。
  * ========================================================================== */
 'use strict';
-const APP_VERSION = '20260903-p0';
+const APP_VERSION = '20260903-table-pagination';
 const content = () => document.getElementById('pageContent');
 const loaded = new Set();
 
@@ -144,6 +144,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         .flatMap(group => group.items)
         .filter(item => item.page !== 'all' && canAccessPage(item.page))
         .map(item => item.page);
+    installTableEnhancements(document.getElementById('appShell'));
     bindNav();
 
     let start = 'dashboard.html';

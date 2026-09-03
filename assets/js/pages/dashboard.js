@@ -97,7 +97,7 @@
 
     async function loadAlarms() {
         let rows = [];
-        try { rows = await api('/gsp/environment/alarms'); } catch (e) { rows = []; }
+        try { rows = await apiAll('/gsp/environment/alarms'); } catch (e) { rows = []; }
         const open = rows.filter(r => ['OPEN', 'ACKNOWLEDGED'].includes(r.status)).slice(0, 8);
         document.getElementById('alarmList').innerHTML = open.length ? `
         <table class="data-table">
