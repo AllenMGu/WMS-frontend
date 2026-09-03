@@ -4,7 +4,7 @@
  * "全部功能" -> 在内容区渲染全目录按钮网格，点击按钮原地加载对应模块。
  * ========================================================================== */
 'use strict';
-const APP_VERSION = '20260902-p0b';
+const APP_VERSION = '20260903-p0';
 const content = () => document.getElementById('pageContent');
 const loaded = new Set();
 

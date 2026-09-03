@@ -8,6 +8,8 @@
     let partners = [];
     let goodsList = [];
     let productProfiles = [];
+    let authorizationAlerts = [];
+    let authorizationWarningDays = 30;
     let currentFilter = { partner_type: '', status: '' };
 
     async function pageInit(el) { _el = el || document.getElementById('pageContent');
@@ -23,6 +25,7 @@
                 <button class="btn btn-primary" id="newPartnerBtn"><i class="fa fa-plus"></i> 新建合作方</button>
             </div>
             <div class="card-body">
+                <div id="supplierProductAlerts" class="mb-4"></div>
                 <div class="filter-bar mb-4">
                     <select id="fType" class="input-field">
                         <option value="">全部类型</option>
@@ -56,13 +59,35 @@
 
     async function load(force) {
         try {
-            [partners, goodsList, productProfiles] = await Promise.all([
+            let summary;
+            [partners, goodsList, productProfiles, summary] = await Promise.all([
                 refPartners(force),
                 refGoods(force),
                 api('/gsp/products?limit=5000'),
+                api('/gsp/compliance/summary'),
             ]);
+            authorizationWarningDays = summary.supplier_product_warning_days || 30;
+            authorizationAlerts = await api(`/gsp/supplier-product-authorizations?alert_only=true&warning_days=${authorizationWarningDays}`);
+            renderAuthorizationAlerts();
             renderTable();
         } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    function renderAuthorizationAlerts() {
+        const box = document.getElementById('supplierProductAlerts');
+        if (!box) return;
+        if (!authorizationAlerts.length) {
+            box.innerHTML = '<div class="alert alert-success"><i class="fa fa-check-circle mr-2"></i>当前没有待审批、临期或过期的供应商品种授权。</div>';
+            return;
+        }
+        const today = todayISO();
+        box.innerHTML = `<div class="alert alert-warning mb-2"><b>供货品种授权预警：</b>以下记录待审批、${authorizationWarningDays} 天内到期或已经过期。</div>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>供应商</th><th>品种</th><th>有效期至</th><th>状态</th><th>处理</th></tr></thead><tbody>${authorizationAlerts.map(a => {
+            const supplier = partners.find(p => p.id === a.supplier_id);
+            const goods = goodsList.find(g => g.id === a.goods_id);
+            const state = a.status === 'PENDING' ? badge('待审批', 'warning') : a.valid_to < today ? badge('已过期', 'danger') : badge(`${authorizationWarningDays}天内到期`, 'warning');
+            return `<tr><td>${esc(supplier?.name || `供应商 #${a.supplier_id}`)}</td><td>${esc(goods ? `${goods.name}（${goods.spec || ''}）` : `货物 #${a.goods_id}`)}</td><td>${fmtD(a.valid_to)}</td><td>${state}</td><td><button class="btn btn-link btn-sm" onclick="PG('partners').viewPartner(${a.supplier_id})">查看处理</button></td></tr>`;
+        }).join('')}</tbody></table></div>`;
     }
 
     function renderTable() {
@@ -209,7 +234,7 @@
             ${['SUPPLIER', 'BOTH'].includes(p.partner_type) ? `
             <div class="flex items-center justify-between mt-4 mb-2">
                 <span class="font-semibold text-sm">获准供货品种目录</span>
-                <button class="btn btn-primary btn-sm" id="addSupplierProductBtn"><i class="fa fa-plus"></i> 关联供货品种</button>
+                <div class="flex gap-2"><button class="btn btn-secondary btn-sm" id="bulkSupplierProductBtn"><i class="fa fa-upload"></i> 批量导入</button><button class="btn btn-primary btn-sm" id="addSupplierProductBtn"><i class="fa fa-plus"></i> 关联供货品种</button></div>
             </div>
             <div class="alert alert-warning mb-2">供应商和品种分别首营通过后，仍必须由质量人员独立批准该关联；未批准、暂停或过期的关联不能采购、收货或验收。</div>
             <div class="table-wrap"><table class="data-table"><thead><tr><th>货物</th><th>批准文号</th><th>生产厂家</th><th>授权范围</th><th>有效期</th><th>维护/批准人</th><th>状态</th><th class="actions">操作</th></tr></thead><tbody id="supplierProductBody"></tbody></table></div>` : ''}
@@ -245,6 +270,7 @@
             };
             renderAuthorizations();
             modal.querySelector('#addSupplierProductBtn').addEventListener('click', () => openSupplierProductModal(id));
+            modal.querySelector('#bulkSupplierProductBtn').addEventListener('click', () => openBulkSupplierProductModal(id));
         }
     }
 
@@ -284,6 +310,79 @@
     }
 
     function editSupplierProduct(partnerId, goodsId) { openSupplierProductModal(partnerId, goodsId); }
+
+    const supplierProductCsvHeaders = ['goods_barcode', 'approval_no', 'authorization_ref', 'authorization_sha256', 'authorization_size_bytes', 'scope_description', 'valid_from', 'valid_to'];
+
+    function parseCsv(text) {
+        const rows = [];
+        let row = [];
+        let cell = '';
+        let quoted = false;
+        for (let i = 0; i < text.length; i += 1) {
+            const char = text[i];
+            if (quoted) {
+                if (char === '"' && text[i + 1] === '"') { cell += '"'; i += 1; }
+                else if (char === '"') quoted = false;
+                else cell += char;
+            } else if (char === '"' && cell === '') quoted = true;
+            else if (char === ',') { row.push(cell); cell = ''; }
+            else if (char === '\n' || char === '\r') {
+                if (char === '\r' && text[i + 1] === '\n') i += 1;
+                row.push(cell); cell = '';
+                if (row.some(value => value.trim())) rows.push(row);
+                row = [];
+            } else cell += char;
+        }
+        row.push(cell);
+        if (row.some(value => value.trim())) rows.push(row);
+        return rows;
+    }
+
+    function downloadSupplierProductTemplate() {
+        const content = `\uFEFF${supplierProductCsvHeaders.join(',')}\r\n`;
+        const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }));
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'supplier-product-authorization-template.csv';
+        anchor.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function openBulkSupplierProductModal(partnerId) {
+        const approved = productProfiles.filter(profile => profile.status === 'APPROVED').slice(0, 20);
+        const modal = openModal({
+            title: '批量导入供应商供货品种',
+            size: 'lg',
+            body: `<div class="alert alert-warning mb-3">导入只建立或更新为<b>待审批</b>，不会自动批准；已批准关联被更新后也会重新待审。单次最多 1000 行，整个文件校验通过后才会一次性写入。</div>
+            <div class="flex gap-2 mb-3"><button type="button" class="btn btn-secondary btn-sm" id="spaDownloadTemplate"><i class="fa fa-download"></i> 下载 CSV 模板</button></div>
+            <div class="form-group"><label class="form-label">UTF-8 CSV 文件 *</label><input type="file" accept=".csv,text/csv" id="spaCsvFile" class="input-field"></div>
+            <div class="form-group"><label class="form-label">批量导入原因 *（≥3字）</label><textarea id="spaBulkReason" class="input-field" rows="2"></textarea></div>
+            <div class="text-xs mb-2" style="color:var(--gray-500)">模板使用货物条码和批准文号双重核对。当前已批准品种示例：</div>
+            <div class="table-wrap"><table class="data-table"><thead><tr><th>货物条码</th><th>批准文号</th><th>品种</th></tr></thead><tbody>${approved.length ? approved.map(profile => { const goods = goodsList.find(item => item.id === profile.goods_id); return `<tr><td>${esc(goods?.barcode || '-')}</td><td>${esc(profile.approval_no)}</td><td>${esc(goods?.name || profile.generic_name)}</td></tr>`; }).join('') : '<tr><td colspan="3">暂无已批准品种</td></tr>'}</tbody></table></div>`,
+            footer: '<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="spaBulkSubmit">导入并进入待审批</button>',
+        });
+        modal.querySelector('#spaDownloadTemplate').addEventListener('click', downloadSupplierProductTemplate);
+        modal.querySelector('#spaBulkSubmit').addEventListener('click', async () => {
+            const file = modal.querySelector('#spaCsvFile').files[0];
+            const reason = modal.querySelector('#spaBulkReason').value.trim();
+            if (!file || reason.length < 3) { showToast('请选择 CSV 文件并填写导入原因', 'warning'); return; }
+            try {
+                const parsed = parseCsv(await file.text());
+                if (parsed.length < 2) throw new Error('CSV 没有数据行');
+                const headers = parsed[0].map((value, index) => index === 0 ? value.replace(/^\uFEFF/, '').trim() : value.trim());
+                if (headers.join(',') !== supplierProductCsvHeaders.join(',')) throw new Error('CSV 表头与模板不一致');
+                const rows = parsed.slice(1).map(values => Object.fromEntries(headers.map((header, index) => [header, (values[index] || '').trim()]))).map(row => ({
+                    ...row,
+                    authorization_size_bytes: Number(row.authorization_size_bytes),
+                }));
+                if (rows.length > 1000) throw new Error('单次导入不能超过 1000 行');
+                const result = await api(`/gsp/partners/${partnerId}/products/bulk-import`, { method: 'POST', body: { rows, reason } });
+                document.querySelectorAll('.modal').forEach(closeModal);
+                showToast(`批量导入完成：新增 ${result.created}，更新 ${result.updated}，共 ${result.pending_approval} 条待审批`, 'success');
+                await load(true);
+            } catch (e) { showToast(e.message, 'error'); }
+        });
+    }
 
     function openDocModal(partnerId, docs, onAdd) {
         const modal = openModal({

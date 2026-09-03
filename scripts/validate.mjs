@@ -50,6 +50,7 @@ if (errors.length === 0) {
   const users = readFileSync("assets/js/pages/users.js", "utf8");
   const recalls = readFileSync("assets/js/pages/recalls.js", "utf8");
   const environment = readFileSync("assets/js/pages/environment.js", "utf8");
+  const dashboard = readFileSync("assets/js/pages/dashboard.js", "utf8");
   const procurement = readFileSync("assets/js/pages/procurement.js", "utf8");
   const partners = readFileSync("assets/js/pages/partners.js", "utf8");
   const products = readFileSync("assets/js/pages/products.js", "utf8");
@@ -127,6 +128,12 @@ if (errors.length === 0) {
   }
   if (!partners.includes("/products") || !partners.includes("approveSupplierProduct") || !partners.includes("suspendSupplierProduct")) {
     errors.push("首营管理未覆盖供应商供货品种关联、批准或暂停闭环");
+  }
+  if (!partners.includes("products/bulk-import") || !partners.includes("supplier-product-authorization-template.csv")) {
+    errors.push("首营管理未接入供应商品种 CSV 批量导入或模板下载");
+  }
+  if (!partners.includes("supplier-product-authorizations?alert_only=true") || !dashboard.includes("near_expiry_supplier_product_authorizations")) {
+    errors.push("供应商品种授权待审、临期和过期预警未完整展示");
   }
   if (!procurement.includes("products?effective_only=true") || !procurement.includes("authorizedGoods")) {
     errors.push("采购建单未按供应商有效供货品种目录过滤产品");

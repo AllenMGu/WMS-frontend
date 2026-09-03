@@ -46,6 +46,7 @@
             statCard('fa-file-text-o', '#f59e0b', '待审批品种档案', data.pending_product_approvals, 'products.html'),
             statCard('fa-handshake-o', '#f59e0b', '待审批合作方', data.pending_partner_approvals, 'partners.html'),
             statCard('fa-id-card-o', '#ef4444', '过期证照/文件', (data.expired_partner_licenses || 0) + (data.expired_partner_documents || 0), 'partners.html'),
+            statCard('fa-list-alt', '#f59e0b', '供货品种授权待处理', (data.pending_supplier_product_authorizations || 0) + (data.near_expiry_supplier_product_authorizations || 0) + (data.expired_supplier_product_authorizations || 0), 'partners.html'),
             statCard('fa-hourglass-half', '#3b82f6', '近效期批次(90天)', data.near_expiry_batches, 'products.html'),
             statCard('fa-lock', '#ef4444', '质量锁定', data.active_quality_holds, 'products.html'),
             statCard('fa-shopping-cart', '#3b82f6', '流转中销售订单', data.pending_sales_orders, 'sales.html'),
@@ -61,6 +62,9 @@
         const attention = [];
         if (data.expired_partner_licenses) attention.push(['danger', '过期合作方许可证', `${data.expired_partner_licenses} 家合作方许可证已过期`, 'partners.html']);
         if (data.expired_partner_documents) attention.push(['danger', '过期资质文件', `${data.expired_partner_documents} 份已核验资质文件过期`, 'partners.html']);
+        if (data.pending_supplier_product_authorizations) attention.push(['info', '供货品种授权待审批', `${data.pending_supplier_product_authorizations} 条供应商品种关联待独立审批`, 'partners.html']);
+        if (data.near_expiry_supplier_product_authorizations) attention.push(['warning', '供货品种授权临期', `${data.near_expiry_supplier_product_authorizations} 条授权将在 ${data.supplier_product_warning_days || 30} 天内到期`, 'partners.html']);
+        if (data.expired_supplier_product_authorizations) attention.push(['danger', '供货品种授权过期', `${data.expired_supplier_product_authorizations} 条授权已过期并阻断采购`, 'partners.html']);
         if (data.expired_batches) attention.push(['danger', '过期批次', `${data.expired_batches} 个批次已过期`, 'products.html']);
         if (data.active_quality_holds) attention.push(['warning', '质量锁定', `${data.active_quality_holds} 个批次处于质量锁定`, 'products.html']);
         if (data.pending_nonconforming_dispositions) attention.push(['danger', '不合格品待批准', `${data.pending_nonconforming_dispositions} 条不合格品记录待处置批准`, 'disposition.html']);
