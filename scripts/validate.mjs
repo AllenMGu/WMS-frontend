@@ -75,6 +75,15 @@ if (errors.length === 0) {
   if (!common.includes("async function apiAll")) {
     errors.push("目录查询缺少完整分页加载");
   }
+  if (!common.includes("function installTableEnhancements") || !app.includes("installTableEnhancements")) {
+    errors.push("SPA 数据表未统一接入排序和翻页");
+  }
+  if (!common.includes("aria-sort") || !common.includes("data-page-size")) {
+    errors.push("数据表排序或每页条数控制缺失");
+  }
+  if (environment.includes("readings.slice(-100).reverse()")) {
+    errors.push("温湿度读数仍在截取最旧 100 条并反转");
+  }
   if (common.includes("new Date().toISOString().slice(0, 10)")) {
     errors.push("默认业务日期仍使用 UTC 日期");
   }

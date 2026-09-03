@@ -23,7 +23,7 @@
     }
 
     async function loadCarriers() {
-        const list = await api('/gsp/transport/carriers');
+        const list = await apiAll('/gsp/transport/carriers');
         const out = [];
         for (const c of list.filter(x => x.status === 'APPROVED')) {
             try {

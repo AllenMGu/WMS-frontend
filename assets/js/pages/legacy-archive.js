@@ -61,8 +61,8 @@
 
     async function searchBatch(id) {
         const q = content().querySelector('#archiveSearch').value.trim();
-        const params = new URLSearchParams(); if (id) params.set('batch_id', id); if (q) params.set('q', q); params.set('limit', '200');
-        try { records = await api(`/gsp/legacy-archive/records?${params}`); content().querySelector('#archiveRecords').innerHTML = `<div class="table-wrap"><table class="data-table"><thead><tr><th>类别</th><th>来源键</th><th>业务日期</th><th>标题</th><th>内容摘要</th><th>归档哈希</th></tr></thead><tbody>${records.map(r => `<tr><td>${esc(r.source_entity)}</td><td>${esc(r.source_table)}/${esc(r.source_key)}</td><td>${fmtD(r.business_date)}</td><td>${esc(r.title)}<br><small>${esc(r.search_text)}</small></td><td><pre style="max-width:420px;white-space:pre-wrap">${esc(JSON.stringify(r.payload, null, 2))}</pre></td><td><code>${esc(r.record_hash)}</code></td></tr>`).join('') || '<tr><td colspan="6"><div class="empty-state">未找到匹配记录</div></td></tr>'}</tbody></table></div>`; } catch (e) { showToast(e.message, 'error'); }
+        const params = new URLSearchParams(); if (id) params.set('batch_id', id); if (q) params.set('q', q);
+        try { records = await apiAll(`/gsp/legacy-archive/records?${params}`); content().querySelector('#archiveRecords').innerHTML = `<div class="table-wrap"><table class="data-table"><thead><tr><th>类别</th><th>来源键</th><th>业务日期</th><th>标题</th><th>内容摘要</th><th>归档哈希</th></tr></thead><tbody>${records.map(r => `<tr><td>${esc(r.source_entity)}</td><td>${esc(r.source_table)}/${esc(r.source_key)}</td><td>${fmtD(r.business_date)}</td><td>${esc(r.title)}<br><small>${esc(r.search_text)}</small></td><td><pre style="max-width:420px;white-space:pre-wrap">${esc(JSON.stringify(r.payload, null, 2))}</pre></td><td><code>${esc(r.record_hash)}</code></td></tr>`).join('') || '<tr><td colspan="6"><div class="empty-state">未找到匹配记录</div></td></tr>'}</tbody></table></div>`; } catch (e) { showToast(e.message, 'error'); }
     }
 
     async function exportBatch(id, batchNo) {

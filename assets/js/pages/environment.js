@@ -37,9 +37,9 @@ async function loadTab() {
     const box = document.getElementById('tabContent');
     box.innerHTML = '<div class="card p-6 text-center"><span class="loading"></span></div>';
     try {
-        if (tab === 'devices') { devices = await api('/gsp/environment/devices'); await renderDevices(box); }
-        else if (tab === 'assignments') { assignments = await api('/gsp/environment/assignments'); await renderAssignments(box); }
-        else { alarms = await api('/gsp/environment/alarms'); await renderAlarms(box); }
+        if (tab === 'devices') { devices = await apiAll('/gsp/environment/devices'); await renderDevices(box); }
+        else if (tab === 'assignments') { assignments = await apiAll('/gsp/environment/assignments'); await renderAssignments(box); }
+        else { alarms = await apiAll('/gsp/environment/alarms'); await renderAlarms(box); }
     } catch (e) { box.innerHTML = `<div class="alert alert-error"><i class="fa fa-exclamation-circle mr-2"></i>${esc(e.message)}</div>`; }
 }
 
@@ -311,7 +311,7 @@ function addReading(assignmentId) {
 async function viewReadings(assignmentId) {
     let readings = [];
     try {
-        readings = await api(`/gsp/environment/assignments/${assignmentId}/readings`);
+        readings = await apiAll(`/gsp/environment/assignments/${assignmentId}/readings`);
     } catch (e) {
         openModal({
             title: '监测读数记录',
@@ -325,7 +325,7 @@ async function viewReadings(assignmentId) {
         body: `
             <div class="table-wrap"><table class="data-table">
                 <thead><tr><th>观测时间</th><th>温度</th><th>湿度</th><th>电量</th><th>评估</th><th>哈希</th></tr></thead>
-                <tbody>${readings.slice(-100).reverse().map(r => `<tr><td>${fmtDT(r.observed_at)}</td><td>${esc(r.temperature)}</td><td>${esc(r.humidity ?? '-')}</td><td>${esc(r.battery_percent ?? '-')}</td><td>${badge(r.evaluation, r.evaluation === 'NORMAL' ? 'success' : 'danger')}</td><td class="text-xs" style="max-width:120px">${esc((r.record_hash || '').slice(0, 16))}…</td></tr>`).join('') || '<tr><td colspan="6"><div class="empty-state">无读数</div></td></tr>'}</tbody>
+                <tbody>${readings.map(r => `<tr><td>${fmtDT(r.observed_at)}</td><td>${esc(r.temperature)}</td><td>${esc(r.humidity ?? '-')}</td><td>${esc(r.battery_percent ?? '-')}</td><td>${badge(r.evaluation, r.evaluation === 'NORMAL' ? 'success' : 'danger')}</td><td class="text-xs" style="max-width:120px">${esc((r.record_hash || '').slice(0, 16))}…</td></tr>`).join('') || '<tr><td colspan="6"><div class="empty-state">无读数</div></td></tr>'}</tbody>
             </table></div>`,
     });
 }

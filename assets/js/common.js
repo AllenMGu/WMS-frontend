@@ -147,6 +147,137 @@ async function apiAll(path, pageSize = 500) {
         if (page.length < pageSize) return items;
     }
 }
+
+/* ----------------------------- 表格排序 / 翻页 ----------------------------- */
+function tableSortValue(cell) {
+    const raw = (cell?.dataset.sortValue || cell?.textContent || '').trim();
+    if (!raw || raw === '-') return { type: 'empty', value: '' };
+    const numeric = raw.replace(/,/g, '').replace(/%$/, '');
+    if (/^-?\d+(\.\d+)?$/.test(numeric)) return { type: 'number', value: Number(numeric) };
+    if (/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2})?/.test(raw)) {
+        const time = Date.parse(raw.replace(' ', 'T'));
+        if (!Number.isNaN(time)) return { type: 'number', value: time };
+    }
+    return { type: 'text', value: raw };
+}
+function compareTableCells(a, b) {
+    const left = tableSortValue(a);
+    const right = tableSortValue(b);
+    if (left.type === 'empty' || right.type === 'empty') {
+        return left.type === right.type ? 0 : left.type === 'empty' ? 1 : -1;
+    }
+    if (left.type === 'number' && right.type === 'number') return left.value - right.value;
+    return String(left.value).localeCompare(String(right.value), 'zh-CN', { numeric: true, sensitivity: 'base' });
+}
+function enhanceDataTable(table) {
+    if (!table || table.dataset.tableEnhanced === 'true' || table.dataset.noPagination === 'true') return;
+    const tbody = table.tBodies[0];
+    const headers = Array.from(table.tHead?.rows[0]?.cells || []);
+    if (!tbody || !headers.length) return;
+    table.dataset.tableEnhanced = 'true';
+
+    const state = { page: 1, pageSize: Number(table.dataset.pageSize) || 20, sortIndex: null, direction: 1, rows: [] };
+    const pager = document.createElement('div');
+    pager.className = 'filter-bar justify-between p-3';
+    pager.dataset.tablePager = 'true';
+    pager.innerHTML = `
+        <span class="text-xs text-gray-500" data-page-summary></span>
+        <div class="flex items-center gap-2">
+            <select class="input-field" data-page-size aria-label="每页条数" style="min-width:88px">
+                <option value="20">20 条/页</option><option value="50">50 条/页</option><option value="100">100 条/页</option>
+            </select>
+            <button type="button" class="btn btn-secondary btn-sm" data-page-prev><i class="fa fa-chevron-left"></i> 上一页</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-page-next>下一页 <i class="fa fa-chevron-right"></i></button>
+        </div>`;
+    table.insertAdjacentElement('afterend', pager);
+    const summary = pager.querySelector('[data-page-summary]');
+    const sizeSelect = pager.querySelector('[data-page-size]');
+    const prev = pager.querySelector('[data-page-prev]');
+    const next = pager.querySelector('[data-page-next]');
+    sizeSelect.value = String(state.pageSize);
+
+    let bodyObserver;
+    const renderPage = () => {
+        bodyObserver.disconnect();
+        const ordered = state.rows.slice();
+        if (state.sortIndex !== null) {
+            ordered.sort((a, b) => {
+                const compared = compareTableCells(a.row.cells[state.sortIndex], b.row.cells[state.sortIndex]);
+                return compared ? compared * state.direction : a.index - b.index;
+            });
+        }
+        const total = ordered.length;
+        const totalPages = Math.max(1, Math.ceil(total / state.pageSize));
+        state.page = Math.min(state.page, totalPages);
+        const start = (state.page - 1) * state.pageSize;
+        ordered.forEach(({ row }, index) => {
+            tbody.appendChild(row);
+            row.classList.toggle('hidden', index < start || index >= start + state.pageSize);
+        });
+        const hasEmptyState = total === 1 && ordered[0].row.cells.length === 1 && ordered[0].row.cells[0].colSpan > 1;
+        pager.classList.toggle('hidden', total <= state.pageSize || hasEmptyState);
+        summary.textContent = `共 ${total} 条，第 ${state.page}/${totalPages} 页`;
+        prev.disabled = state.page <= 1;
+        next.disabled = state.page >= totalPages;
+        bodyObserver.observe(tbody, { childList: true });
+    };
+    const captureRows = () => {
+        state.rows = Array.from(tbody.rows).map((row, index) => ({ row, index }));
+        state.page = 1;
+        renderPage();
+    };
+    bodyObserver = new MutationObserver(captureRows);
+
+    headers.forEach((header, index) => {
+        if (header.classList.contains('actions') || header.colSpan > 1 || header.dataset.sortDisabled === 'true' || !header.textContent.trim()) return;
+        header.tabIndex = 0;
+        header.setAttribute('role', 'button');
+        header.setAttribute('aria-sort', 'none');
+        header.title = '点击排序';
+        const icon = document.createElement('i');
+        icon.className = 'fa fa-sort ml-1';
+        icon.dataset.sortIcon = 'true';
+        icon.setAttribute('aria-hidden', 'true');
+        header.appendChild(icon);
+        const sort = () => {
+            state.direction = state.sortIndex === index ? -state.direction : 1;
+            state.sortIndex = index;
+            state.page = 1;
+            headers.forEach(item => {
+                item.setAttribute('aria-sort', 'none');
+                const itemIcon = item.querySelector('[data-sort-icon]');
+                if (itemIcon) itemIcon.className = 'fa fa-sort ml-1';
+            });
+            header.setAttribute('aria-sort', state.direction === 1 ? 'ascending' : 'descending');
+            icon.className = `fa ${state.direction === 1 ? 'fa-sort-asc' : 'fa-sort-desc'} ml-1`;
+            renderPage();
+        };
+        header.addEventListener('click', sort);
+        header.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); sort(); }
+        });
+    });
+    sizeSelect.addEventListener('change', () => { state.pageSize = Number(sizeSelect.value); state.page = 1; renderPage(); });
+    prev.addEventListener('click', () => { if (state.page > 1) { state.page -= 1; renderPage(); } });
+    next.addEventListener('click', () => {
+        if (state.page * state.pageSize < state.rows.length) { state.page += 1; renderPage(); }
+    });
+    captureRows();
+}
+function installTableEnhancements(root = document) {
+    const scan = node => {
+        if (node.matches?.('table.data-table')) enhanceDataTable(node);
+        node.querySelectorAll?.('table.data-table').forEach(enhanceDataTable);
+    };
+    scan(root);
+    const observer = new MutationObserver(mutations => {
+        mutations.forEach(mutation => mutation.addedNodes.forEach(node => {
+            if (node.nodeType === Node.ELEMENT_NODE) scan(node);
+        }));
+    });
+    observer.observe(root, { childList: true, subtree: true });
+    return observer;
+}
 function withReason(path, reason) {
     const separator = path.includes('?') ? '&' : '?';
     return `${path}${separator}reason=${encodeURIComponent(String(reason || '').trim())}`;
@@ -527,7 +658,7 @@ async function refHolds(force) {
 }
 async function refCarriers(force) {
     if (!force && refCache.carriers) return refCache.carriers;
-    refCache.carriers = await api('/gsp/transport/carriers');
+    refCache.carriers = await apiAll('/gsp/transport/carriers');
     return refCache.carriers;
 }
 function optionHTML(items, valueKey, labelKey, placeholder) {
