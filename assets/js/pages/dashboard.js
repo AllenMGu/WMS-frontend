@@ -116,7 +116,7 @@
 
     async function loadHolds() {
         let rows = [];
-        try { rows = await api('/gsp/quality-holds'); } catch (e) { rows = []; }
+        try { rows = await apiAll('/gsp/quality-holds'); } catch (e) { rows = []; }
         const active = rows.filter(r => r.status === 'ACTIVE').slice(0, 10);
         document.getElementById('holdList').innerHTML = active.length ? `
         <table class="data-table">

@@ -34,8 +34,8 @@ async function loadTab() {
     const box = document.getElementById('tabContent');
     box.innerHTML = '<div class="card p-6 text-center"><span class="loading"></span></div>';
     try {
-        if (tab === 'recalls') { recalls = await api('/gsp/recalls'); await renderRecalls(box); }
-        else { drills = await api('/gsp/recall-drills'); await renderDrills(box); }
+        if (tab === 'recalls') { recalls = await apiAll('/gsp/recalls'); await renderRecalls(box); }
+        else { drills = await apiAll('/gsp/recall-drills'); await renderDrills(box); }
     } catch (e) { box.innerHTML = `<div class="alert alert-error"><i class="fa fa-exclamation-circle mr-2"></i>${esc(e.message)}</div>`; }
 }
 

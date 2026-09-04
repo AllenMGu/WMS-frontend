@@ -157,9 +157,9 @@ async function viewCarrier(id) {
     const c = carriers.find(x => x.id === id);
     let docs = [], vehicles = [], drivers = [];
     try { [docs, vehicles, drivers] = await Promise.all([
-        api(`/gsp/transport/carriers/${id}/documents`),
-        api(`/gsp/transport/carriers/${id}/vehicles`),
-        api(`/gsp/transport/carriers/${id}/drivers`),
+        apiAll(`/gsp/transport/carriers/${id}/documents`),
+        apiAll(`/gsp/transport/carriers/${id}/vehicles`),
+        apiAll(`/gsp/transport/carriers/${id}/drivers`),
     ]); } catch (e) { /* ignore */ }
     const modal = openModal({
         title: `承运方详情 - ${c ? c.name : id}`,
@@ -336,7 +336,7 @@ async function renderTasks(box) {
 async function viewTask(id) {
     const t = tasks.find(x => x.id === id);
     let events = [], exceptions = [];
-    try { [events, exceptions] = await Promise.all([api(`/gsp/transport/tasks/${id}/events`), api(`/gsp/transport/tasks/${id}/exceptions`)]); } catch (e) { /* ignore */ }
+    try { [events, exceptions] = await Promise.all([apiAll(`/gsp/transport/tasks/${id}/events`), apiAll(`/gsp/transport/tasks/${id}/exceptions`)]); } catch (e) { /* ignore */ }
     openModal({
         title: `运输任务详情 - ${t ? t.task_no : id}`,
         size: 'lg',

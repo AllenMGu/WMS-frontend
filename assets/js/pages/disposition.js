@@ -35,8 +35,8 @@ async function loadTab() {
     const box = document.getElementById('tabContent');
     box.innerHTML = '<div class="card p-6 text-center"><span class="loading"></span></div>';
     try {
-        if (tab === 'nc') { records = await api('/gsp/quality/nonconforming'); await renderNC(box); }
-        else { returns = await api('/gsp/procurement/returns'); await renderReturns(box); }
+        if (tab === 'nc') { records = await apiAll('/gsp/quality/nonconforming'); await renderNC(box); }
+        else { returns = await apiAll('/gsp/procurement/returns'); await renderReturns(box); }
     } catch (e) { box.innerHTML = `<div class="alert alert-error"><i class="fa fa-exclamation-circle mr-2"></i>${esc(e.message)}</div>`; }
 }
 

@@ -18,7 +18,7 @@
     async function loadBatches() {
         content().innerHTML = '<div class="card p-6 text-center"><span class="loading"></span></div>';
         try {
-            batches = await api('/gsp/legacy-archive/batches');
+            batches = await apiAll('/gsp/legacy-archive/batches');
             render();
         } catch (e) { content().innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`; }
     }

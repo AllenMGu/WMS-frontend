@@ -34,7 +34,7 @@ function render() {
 
 async function load() {
     try {
-        plans = await api('/gsp/stocktaking/plans');
+        plans = await apiAll('/gsp/stocktaking/plans');
         renderTable();
     } catch (e) { showToast(e.message, 'error'); }
 }

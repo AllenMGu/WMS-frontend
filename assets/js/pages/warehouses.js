@@ -50,8 +50,8 @@
 
     async function load() {
         try {
-            warehouses = await api('/warehouses/');
-            locations = await api('/locations/');
+            warehouses = await apiAll('/warehouses/');
+            locations = await apiAll('/locations/');
             if (!selectedWarehouseId && warehouses.length) selectedWarehouseId = warehouses[0].id;
             renderWarehouses();
             renderLocations();

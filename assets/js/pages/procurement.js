@@ -39,8 +39,8 @@
         const box = document.getElementById('tabContent');
         box.innerHTML = '<div class="card p-6 text-center"><span class="loading"></span></div>';
         try {
-            if (tab === 'orders') { orders = await api('/gsp/procurement/orders'); await renderOrders(box); }
-            else { receipts = await api('/gsp/receiving/receipts'); await renderReceipts(box); }
+            if (tab === 'orders') { orders = await apiAll('/gsp/procurement/orders'); await renderOrders(box); }
+            else { receipts = await apiAll('/gsp/receiving/receipts'); await renderReceipts(box); }
         } catch (e) { box.innerHTML = `<div class="alert alert-error"><i class="fa fa-exclamation-circle mr-2"></i>${esc(e.message)}</div>`; }
     }
 
@@ -122,7 +122,7 @@
             const supplierId = Number(supplierSelect.value);
             if (!supplierId) { authorizedGoods = []; modal.querySelector('#poScopeHint').textContent = '请先选择供货方；产品清单只显示该供应商已独立批准且在有效期内的供货品种。'; return; }
             try {
-                const authorizations = await api(`/gsp/partners/${supplierId}/products?effective_only=true`);
+                const authorizations = await apiAll(`/gsp/partners/${supplierId}/products?effective_only=true`);
                 const allowed = new Set(authorizations.map(a => a.goods_id));
                 authorizedGoods = goodsList.filter(g => allowed.has(g.id));
                 modal.querySelector('#poScopeHint').textContent = authorizedGoods.length ? `当前供应商共有 ${authorizedGoods.length} 个有效获准供货品种。` : '当前供应商没有有效获准供货品种，不能建立采购订单。';

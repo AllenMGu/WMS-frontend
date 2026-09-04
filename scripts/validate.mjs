@@ -83,6 +83,25 @@ if (errors.length === 0) {
   if (!common.includes("aria-sort") || !common.includes("data-page-size")) {
     errors.push("数据表排序或每页条数控制缺失");
   }
+  if (common.includes("total <= state.pageSize") || !common.includes("pager.classList.toggle('hidden', hasEmptyState)")) {
+    errors.push("非空单页表格仍会隐藏总条数和翻页状态");
+  }
+  if (!common.includes("previousPageSignature") || !common.includes("pageNumber >= 10000")) {
+    errors.push("完整分页加载缺少旧接口重复页或异常页数保护");
+  }
+  const listLoadChecks = [
+    [partners, "apiAll('/gsp/partners')", "合作方"],
+    [partners, "apiAll('/gsp/products')", "首营品种"],
+    [procurement, "apiAll('/gsp/procurement/orders')", "采购订单"],
+    [procurement, "apiAll('/gsp/receiving/receipts')", "采购收货"],
+    [disposition, "apiAll('/gsp/quality/nonconforming')", "不合格品"],
+    [returns, "apiAll('/gsp/returns/sales')", "销后退回"],
+    [qms, "apiAll('/gsp/quality-system/capas')", "CAPA"],
+    [qms, "apiAll('/gsp/quality-system/documents')", "质量文件"],
+  ];
+  for (const [source, marker, label] of listLoadChecks) {
+    if (!source.includes(marker)) errors.push(`${label}列表未读取全部后端分页数据`);
+  }
   if (environment.includes("readings.slice(-100).reverse()")) {
     errors.push("温湿度读数仍在截取最旧 100 条并反转");
   }
