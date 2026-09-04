@@ -52,6 +52,8 @@ if (errors.length === 0) {
   const environment = readFileSync("assets/js/pages/environment.js", "utf8");
   const dashboard = readFileSync("assets/js/pages/dashboard.js", "utf8");
   const procurement = readFileSync("assets/js/pages/procurement.js", "utf8");
+  const disposition = readFileSync("assets/js/pages/disposition.js", "utf8");
+  const returns = readFileSync("assets/js/pages/returns.js", "utf8");
   const partners = readFileSync("assets/js/pages/partners.js", "utf8");
   const products = readFileSync("assets/js/pages/products.js", "utf8");
   const qms = readFileSync("assets/js/pages/qms.js", "utf8");
@@ -134,6 +136,15 @@ if (errors.length === 0) {
   }
   if (!procurement.includes("renderControlledReceiptPrint") || !procurement.includes("printWindow.print()")) {
     errors.push("收货受控打印未生成可打印副本");
+  }
+  if (!procurement.includes("hasAnyGspRole('PROCUREMENT')") || !procurement.includes("hasAnyGspRole('QUALITY_MANAGER', 'QUALITY_REVIEWER')")) {
+    errors.push("采购订单提交/取消与质量批准/驳回按钮未按岗位分离");
+  }
+  if (!disposition.includes("hasAnyGspRole('PROCUREMENT')") || !disposition.includes("hasAnyGspRole('WAREHOUSE_CUSTODIAN')") || !disposition.includes("hasAnyGspRole('QUALITY_MANAGER', 'QUALITY_REVIEWER')")) {
+    errors.push("不合格品与购进退出操作按钮未按质量、采购和仓库岗位分离");
+  }
+  if (!returns.includes("hasAnyGspRole('RETURNS_RECEIVER', 'WAREHOUSE_CUSTODIAN', 'QUALITY_MANAGER', 'QUALITY_REVIEWER')")) {
+    errors.push("销后退回取消按钮未按后端授权岗位展示");
   }
   if (!partners.includes("/products") || !partners.includes("approveSupplierProduct") || !partners.includes("suspendSupplierProduct")) {
     errors.push("首营管理未覆盖供应商供货品种关联、批准或暂停闭环");
