@@ -67,7 +67,9 @@
                             </td>
                             <td class="actions">
                                 ${o.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('procurement').submitPO(${o.id})"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
+                                ${o.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('procurement').cancelPO(${o.id})"><i class="fa fa-ban"></i> 取消</button>` : ''}
                                 ${o.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="PG('procurement').approvePO(${o.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
+                                ${o.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="PG('procurement').rejectPO(${o.id})"><i class="fa fa-times"></i> 驳回</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无采购订单</div></td></tr>'}</tbody>
                 </table>
@@ -473,13 +475,57 @@ function renderControlledReceiptPrint(printWindow, record) {
     window.setTimeout(() => printWindow.print(), 250);
 }
 
+
+    function cancelPO(id) {
+        const modal = openModal({
+            title: '取消采购订单（仅草稿可取消）',
+            size: 'md',
+            body: `
+                <div class="form-group"><label class="form-label">取消原因 *（≥3字）</label><textarea id="poCancelReason" class="input-field" rows="2"></textarea></div>
+            `,
+            footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-danger" id="poCancelOk">确认取消</button>`,
+        });
+        modal.querySelector('#poCancelOk').addEventListener('click', async () => {
+            const reason = modal.querySelector('#poCancelReason').value.trim();
+            if (reason.length < 3) { showToast('取消原因不能少于3个字', 'warning'); return; }
+            try {
+                await api(`/gsp/procurement/orders/${id}/cancel`, { method: 'POST', body: { reason } });
+                closeModal(modal);
+                showToast('采购订单已取消', 'success');
+                await loadTab();
+            } catch (e) { showToast(e.message, 'error'); }
+        });
+    }
+
+    function rejectPO(id) {
+        const modal = openModal({
+            title: '质量驳回采购订单（需电子签名）',
+            size: 'md',
+            body: `
+                <div class="form-group"><label class="form-label">驳回原因 *（≥3字）</label><textarea id="poRejectReason" class="input-field" rows="2"></textarea></div>
+            `,
+            footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-danger" id="poRejectOk">驳回</button>`,
+        });
+        modal.querySelector('#poRejectOk').addEventListener('click', () => {
+            const reason = modal.querySelector('#poRejectReason').value.trim();
+            if (reason.length < 3) { showToast('驳回原因不能少于3个字', 'warning'); return; }
+            closeModal(modal);
+            signAction(
+                { action: 'PURCHASE_ORDER_REJECT', entity_type: 'GspPurchaseOrder', entity_id: id, meaning: 'REJECTION' },
+                { path: `/gsp/procurement/orders/${id}/reject`, opts: { method: 'POST', body: { reason } } },
+                '驳回采购订单'
+            );
+        });
+    }
+
+
     window.PAGES = window.PAGES || {};
     window.PAGES['procurement'] = {
         title: '采购与收货',
         icon: 'fa-arrow-down',
         desc: '采购收货、抽样、验收闭环',
         init: pageInit,
-        fn: { submitPO, approvePO, sampleItem, inspectItem, printRecord },
+        fn: { submitPO, approvePO, cancelPO, rejectPO, sampleItem, inspectItem, printRecord },
     };
     window.pageInit = pageInit; // 兼容直接访问旧页面 procurement.html
 })();

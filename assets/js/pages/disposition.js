@@ -64,6 +64,7 @@ async function renderNC(box) {
                             <td>${statusBadge(r.status)}</td>
                             <td class="actions">
                                 ${r.status === 'PENDING_APPROVAL' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').approveNC(${r.id})"><i class="fa fa-gavel"></i> 批准处置</button>` : ''}
+                                ${r.status === 'PENDING_APPROVAL' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').rejectNC(${r.id})"><i class="fa fa-times"></i> 驳回登记</button>` : ''}
                                 ${r.status === 'APPROVED' && r.approved_disposition === 'DESTROY' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').destroyNC(${r.id})"><i class="fa fa-fire"></i> 监督销毁</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="10"><div class="empty-state">暂无不合格品记录</div></td></tr>'}</tbody>
@@ -187,7 +188,9 @@ async function renderReturns(box) {
                             <td>${esc(r.carrier_name || '-')}</td>
                             <td class="actions">
                                 ${r.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').submitPR(${r.id})"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
+                                ${r.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').cancelPR(${r.id})"><i class="fa fa-ban"></i> 取消</button>` : ''}
                                 ${r.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').approvePR(${r.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
+                                ${r.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').rejectPR(${r.id})"><i class="fa fa-times"></i> 驳回</button>` : ''}
                                 ${r.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').dispatchPR(${r.id})"><i class="fa fa-truck"></i> 退供发运</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无购进退出</div></td></tr>'}</tbody>
@@ -265,13 +268,76 @@ function dispatchPR(id) {
     });
 }
 
+
+function rejectNC(id) {
+    const modal = openModal({
+        title: '驳回不合格品登记（误登记撤销，需电子签名）',
+        size: 'md',
+        body: `
+            <div class="alert alert-warning"><i class="fa fa-exclamation-triangle mr-2"></i>驳回后记录进入 REJECTED；批次仍保持质量锁定，需另行走「解冻复核」放行。登记人不能驳回自己的登记。</div>
+            <div class="form-group"><label class="form-label">驳回原因 *（≥3字）</label><textarea id="nrReason" class="input-field" rows="2"></textarea></div>
+        `,
+        footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-danger" id="nrSubmitBtn">驳回登记</button>`,
+    });
+    modal.querySelector('#nrSubmitBtn').addEventListener('click', () => {
+        const reason = modal.querySelector('#nrReason').value.trim();
+        if (reason.length < 3) { showToast('驳回原因不能少于3个字', 'warning'); return; }
+        closeModal(modal);
+        signAction(
+            { action: 'NONCONFORMING_REJECT', entity_type: 'GspNonconformingRecord', entity_id: id, meaning: 'REJECTION' },
+            { path: `/gsp/quality/nonconforming/${id}/reject`, opts: { method: 'POST', body: { reason } } },
+            '驳回不合格品登记'
+        );
+    });
+}
+function cancelPR(id) {
+    const modal = openModal({
+        title: '取消购进退出单（仅草稿）',
+        size: 'md',
+        body: `
+            <div class="form-group"><label class="form-label">取消原因 *（≥3字）</label><textarea id="pcReason" class="input-field" rows="2"></textarea></div>
+        `,
+        footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-danger" id="pcSubmitBtn">确认取消</button>`,
+    });
+    modal.querySelector('#pcSubmitBtn').addEventListener('click', async () => {
+        const reason = modal.querySelector('#pcReason').value.trim();
+        if (reason.length < 3) { showToast('取消原因不能少于3个字', 'warning'); return; }
+        try {
+            await api(`/gsp/procurement/returns/${id}/cancel`, { method: 'POST', body: { reason } });
+            closeModal(modal);
+            showToast('购进退出单已取消', 'success');
+            await loadTab();
+        } catch (e) { showToast(e.message, 'error'); }
+    });
+}
+function rejectPR(id) {
+    const modal = openModal({
+        title: '质量驳回购进退出单（需电子签名）',
+        size: 'md',
+        body: `
+            <div class="form-group"><label class="form-label">驳回原因 *（≥3字）</label><textarea id="prRejectReason" class="input-field" rows="2"></textarea></div>
+        `,
+        footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-danger" id="prRejectOk">驳回</button>`,
+    });
+    modal.querySelector('#prRejectOk').addEventListener('click', () => {
+        const reason = modal.querySelector('#prRejectReason').value.trim();
+        if (reason.length < 3) { showToast('驳回原因不能少于3个字', 'warning'); return; }
+        closeModal(modal);
+        signAction(
+            { action: 'PURCHASE_RETURN_REJECT', entity_type: 'GspPurchaseReturn', entity_id: id, meaning: 'REJECTION' },
+            { path: `/gsp/procurement/returns/${id}/reject`, opts: { method: 'POST', body: { reason } } },
+            '驳回购进退出单'
+        );
+    });
+}
+
     window.PAGES = window.PAGES || {};
     window.PAGES['disposition'] = {
         title: '不合格品处置',
         icon: 'fa-exclamation-triangle',
         desc: '不合格品登记、批准与处置',
         init: pageInit,
-        fn: { approveNC, destroyNC, submitPR, approvePR, dispatchPR },
+        fn: { approveNC, rejectNC, destroyNC, submitPR, cancelPR, rejectPR, approvePR, dispatchPR },
     };
     window.pageInit = pageInit; // 兼容直接访问旧页面 disposition.html
 })();
