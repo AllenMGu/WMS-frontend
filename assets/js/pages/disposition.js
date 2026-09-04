@@ -63,9 +63,9 @@ async function renderNC(box) {
                             <td>${esc(r.approved_disposition || '-')}</td>
                             <td>${statusBadge(r.status)}</td>
                             <td class="actions">
-                                ${r.status === 'PENDING_APPROVAL' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').approveNC(${r.id})"><i class="fa fa-gavel"></i> 批准处置</button>` : ''}
-                                ${r.status === 'PENDING_APPROVAL' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').rejectNC(${r.id})"><i class="fa fa-times"></i> 驳回登记</button>` : ''}
-                                ${r.status === 'APPROVED' && r.approved_disposition === 'DESTROY' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').destroyNC(${r.id})"><i class="fa fa-fire"></i> 监督销毁</button>` : ''}
+                                ${r.status === 'PENDING_APPROVAL' && hasAnyGspRole('QUALITY_MANAGER', 'QUALITY_REVIEWER') ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').approveNC(${r.id})"><i class="fa fa-gavel"></i> 批准处置</button>` : ''}
+                                ${r.status === 'PENDING_APPROVAL' && hasAnyGspRole('QUALITY_MANAGER', 'QUALITY_REVIEWER') ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').rejectNC(${r.id})"><i class="fa fa-times"></i> 驳回登记</button>` : ''}
+                                ${r.status === 'APPROVED' && r.approved_disposition === 'DESTROY' && hasAnyGspRole('WAREHOUSE_CUSTODIAN') ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').destroyNC(${r.id})"><i class="fa fa-fire"></i> 监督销毁</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="10"><div class="empty-state">暂无不合格品记录</div></td></tr>'}</tbody>
                 </table>
@@ -187,11 +187,11 @@ async function renderReturns(box) {
                             <td>${esc(r.outbound_document_no || '-')}</td>
                             <td>${esc(r.carrier_name || '-')}</td>
                             <td class="actions">
-                                ${r.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').submitPR(${r.id})"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
-                                ${r.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').cancelPR(${r.id})"><i class="fa fa-ban"></i> 取消</button>` : ''}
-                                ${r.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').approvePR(${r.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
-                                ${r.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').rejectPR(${r.id})"><i class="fa fa-times"></i> 驳回</button>` : ''}
-                                ${r.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').dispatchPR(${r.id})"><i class="fa fa-truck"></i> 退供发运</button>` : ''}
+                                ${r.status === 'DRAFT' && hasAnyGspRole('PROCUREMENT') ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').submitPR(${r.id})"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
+                                ${r.status === 'DRAFT' && hasAnyGspRole('PROCUREMENT') ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').cancelPR(${r.id})"><i class="fa fa-ban"></i> 取消</button>` : ''}
+                                ${r.status === 'SUBMITTED' && hasAnyGspRole('QUALITY_MANAGER', 'QUALITY_REVIEWER') ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').approvePR(${r.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
+                                ${r.status === 'SUBMITTED' && hasAnyGspRole('QUALITY_MANAGER', 'QUALITY_REVIEWER') ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').rejectPR(${r.id})"><i class="fa fa-times"></i> 驳回</button>` : ''}
+                                ${r.status === 'APPROVED' && hasAnyGspRole('WAREHOUSE_CUSTODIAN') ? `<button class="btn btn-link btn-sm" onclick="PG('disposition').dispatchPR(${r.id})"><i class="fa fa-truck"></i> 退供发运</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无购进退出</div></td></tr>'}</tbody>
                 </table>

@@ -57,8 +57,8 @@
                 ${(r.items || []).map(i => `<span class="text-xs text-gray-600">批次#${i.batch_id} 收${fmtNum(i.received_quantity)} / 验${fmtNum(i.accepted_quantity)} / 拒${fmtNum(i.rejected_quantity)} <span class="badge badge-${i.inspection_status === 'ACCEPTED' ? 'success' : i.inspection_status === 'REJECTED' ? 'danger' : 'warning'}">${esc(i.inspection_status)}</span></span><br>`).join('')}
             </td>
             <td class="actions">
-                ${r.status === 'PENDING_INSPECTION' ? `<button class="btn btn-link btn-sm" onclick="PG('returns').cancelReturn(${r.id})"><i class="fa fa-ban"></i> 取消</button>` : ''}
-                ${(r.items || []).filter(i => i.inspection_status === 'PENDING').map(i => `<button class="btn btn-link btn-sm" onclick="PG('returns').inspectReturnItem(${r.id}, ${i.id})"><i class="fa fa-search"></i> 检验</button>`).join('')}
+                ${r.status === 'PENDING_INSPECTION' && hasAnyGspRole('RETURNS_RECEIVER', 'WAREHOUSE_CUSTODIAN', 'QUALITY_MANAGER', 'QUALITY_REVIEWER') ? `<button class="btn btn-link btn-sm" onclick="PG('returns').cancelReturn(${r.id})"><i class="fa fa-ban"></i> 取消</button>` : ''}
+                ${hasAnyGspRole('QUALITY_MANAGER', 'QUALITY_REVIEWER') ? (r.items || []).filter(i => i.inspection_status === 'PENDING').map(i => `<button class="btn btn-link btn-sm" onclick="PG('returns').inspectReturnItem(${r.id}, ${i.id})"><i class="fa fa-search"></i> 检验</button>`).join('') : ''}
             </td>
         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无销后退回记录</div></td></tr>';
     }

@@ -66,10 +66,10 @@
                                 ${(o.items || []).map(i => `<span class="text-xs text-gray-600">${esc(goodsList.find(g => g.id === i.goods_id)?.name || i.goods_id)} × ${fmtNum(i.ordered_quantity)}${esc(i.unit)}</span><br>`).join('')}
                             </td>
                             <td class="actions">
-                                ${o.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('procurement').submitPO(${o.id})"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
-                                ${o.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('procurement').cancelPO(${o.id})"><i class="fa fa-ban"></i> 取消</button>` : ''}
-                                ${o.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="PG('procurement').approvePO(${o.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
-                                ${o.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="PG('procurement').rejectPO(${o.id})"><i class="fa fa-times"></i> 驳回</button>` : ''}
+                                ${o.status === 'DRAFT' && hasAnyGspRole('PROCUREMENT') ? `<button class="btn btn-link btn-sm" onclick="PG('procurement').submitPO(${o.id})"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
+                                ${o.status === 'DRAFT' && hasAnyGspRole('PROCUREMENT') ? `<button class="btn btn-link btn-sm" onclick="PG('procurement').cancelPO(${o.id})"><i class="fa fa-ban"></i> 取消</button>` : ''}
+                                ${o.status === 'SUBMITTED' && hasAnyGspRole('QUALITY_MANAGER', 'QUALITY_REVIEWER') ? `<button class="btn btn-link btn-sm" onclick="PG('procurement').approvePO(${o.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
+                                ${o.status === 'SUBMITTED' && hasAnyGspRole('QUALITY_MANAGER', 'QUALITY_REVIEWER') ? `<button class="btn btn-link btn-sm" onclick="PG('procurement').rejectPO(${o.id})"><i class="fa fa-times"></i> 驳回</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无采购订单</div></td></tr>'}</tbody>
                 </table>
