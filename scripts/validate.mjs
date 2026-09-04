@@ -89,6 +89,9 @@ if (errors.length === 0) {
   if (!common.includes("previousPageSignature") || !common.includes("pageNumber >= 10000")) {
     errors.push("完整分页加载缺少旧接口重复页或异常页数保护");
   }
+  if (!common.includes("const data = await api('/gsp/roles/me')") || common.includes("apiAll('/gsp/roles/me')")) {
+    errors.push("当前岗位对象被错误当作分页数组读取");
+  }
   const listLoadChecks = [
     [partners, "refPartners(force)", "合作方页面"],
     [common, "refCache.partners = await apiAll('/gsp/partners')", "合作方公共目录"],
