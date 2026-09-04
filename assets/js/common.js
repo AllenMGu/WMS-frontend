@@ -492,7 +492,7 @@ const PAGE_ROLE_ACCESS = {
     'legacy-archive.html': ['SYSTEM_ADMIN', 'AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
 };
 async function loadCurrentGspRoles() {
-    const data = await apiAll('/gsp/roles/me');
+    const data = await api('/gsp/roles/me');
     currentGspRoles = new Set(data?.roles || []);
 }
 function hasAnyGspRole(...roles) {
