@@ -63,11 +63,11 @@
             [partners, goodsList, productProfiles, summary] = await Promise.all([
                 refPartners(force),
                 refGoods(force),
-                api('/gsp/products?limit=5000'),
+                apiAll('/gsp/products'),
                 api('/gsp/compliance/summary'),
             ]);
             authorizationWarningDays = summary.supplier_product_warning_days || 30;
-            authorizationAlerts = await api(`/gsp/supplier-product-authorizations?alert_only=true&warning_days=${authorizationWarningDays}`);
+            authorizationAlerts = await apiAll(`/gsp/supplier-product-authorizations?alert_only=true&warning_days=${authorizationWarningDays}`);
             renderAuthorizationAlerts();
             renderTable();
         } catch (e) { showToast(e.message, 'error'); }
@@ -194,8 +194,8 @@
         let authorizations = [];
         try {
             [docs, authorizations] = await Promise.all([
-                api(`/gsp/partners/${id}/documents`),
-                ['SUPPLIER', 'BOTH'].includes(p.partner_type) ? api(`/gsp/partners/${id}/products`) : Promise.resolve([]),
+                apiAll(`/gsp/partners/${id}/documents`),
+                ['SUPPLIER', 'BOTH'].includes(p.partner_type) ? apiAll(`/gsp/partners/${id}/products`) : Promise.resolve([]),
             ]);
         } catch (e) { docs = []; authorizations = []; }
         // 该类型合作方批准所需的已核验文件清单

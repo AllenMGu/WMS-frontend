@@ -68,7 +68,7 @@
             const q = new URLSearchParams({ limit });
             if (et) q.set('entity_type', et);
             if (eid) q.set('entity_id', eid);
-            events = await api('/gsp/audit-events?' + q.toString());
+            events = await apiAll('/gsp/audit-events?' + q.toString());
             verifications = await apiAll('/gsp/audit-verifications');
             renderEvents();
             const tbody2 = document.querySelectorAll('#auBody')[0].closest('.card').nextElementSibling;

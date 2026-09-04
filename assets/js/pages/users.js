@@ -49,12 +49,12 @@
 
     async function load() {
         try {
-            users = await api('/users/');
-            roles = await api('/gsp/roles');
+            users = await apiAll('/users/');
+            roles = await apiAll('/gsp/roles');
             renderTables();
         } catch (e) {
             showToast(e.message || '加载失败（用户列表需管理员权限）', 'error');
-            try { roles = await api('/gsp/roles'); renderTables(); } catch (e2) { showToast(e2.message || '岗位列表加载失败', 'error'); }
+            try { roles = await apiAll('/gsp/roles'); renderTables(); } catch (e2) { showToast(e2.message || '岗位列表加载失败', 'error'); }
         }
     }
 
@@ -179,7 +179,7 @@
         if (!u) return;
         let allWh = [], curWh = [];
         try { allWh = await refWarehouses(true); } catch (e) { showToast(e.message, 'error'); return; }
-        try { curWh = await api(`/users/${id}/warehouses`); } catch (e) { showToast(e.message, 'error'); return; }
+        try { curWh = await apiAll(`/users/${id}/warehouses`); } catch (e) { showToast(e.message, 'error'); return; }
         const curIds = curWh.map(w => w.id);
         const modal = openModal({
             title: `分配仓库：${u.username}`, size: 'md',

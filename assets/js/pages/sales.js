@@ -28,8 +28,8 @@
         for (const c of list.filter(x => x.status === 'APPROVED')) {
             try {
                 const [vehicles, drivers] = await Promise.all([
-                    api(`/gsp/transport/carriers/${c.id}/vehicles`),
-                    api(`/gsp/transport/carriers/${c.id}/drivers`),
+                    apiAll(`/gsp/transport/carriers/${c.id}/vehicles`),
+                    apiAll(`/gsp/transport/carriers/${c.id}/drivers`),
                 ]);
                 out.push({ ...c, vehicles, drivers });
             } catch (e) { out.push({ ...c, vehicles: [], drivers: [] }); }
@@ -55,8 +55,8 @@
         const box = document.getElementById('tabContent');
         box.innerHTML = '<div class="card p-6 text-center"><span class="loading"></span></div>';
         try {
-            if (tab === 'orders') { orders = await api('/gsp/sales/orders'); await renderOrders(box); }
-            else { shipments = await api('/gsp/shipping/shipments'); await renderShipments(box); }
+            if (tab === 'orders') { orders = await apiAll('/gsp/sales/orders'); await renderOrders(box); }
+            else { shipments = await apiAll('/gsp/shipping/shipments'); await renderShipments(box); }
         } catch (e) { box.innerHTML = `<div class="alert alert-error"><i class="fa fa-exclamation-circle mr-2"></i>${esc(e.message)}</div>`; }
     }
 

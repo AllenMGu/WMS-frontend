@@ -15,7 +15,7 @@
         await Promise.all([refPartners(), refLocations()]).then(([p, l]) => {
             customers = p.filter(x => ['CUSTOMER', 'BOTH'].includes(x.partner_type)); locations = l;
         }).catch(() => {});
-        try { [orders, shipments] = await Promise.all([api('/gsp/sales/orders'), api('/gsp/shipping/shipments')]); } catch (e) { /* ignore */ }
+        try { [orders, shipments] = await Promise.all([apiAll('/gsp/sales/orders'), apiAll('/gsp/shipping/shipments')]); } catch (e) { /* ignore */ }
         render();
         await load();
     }
@@ -39,7 +39,7 @@
 
     async function load() {
         try {
-            returns = await api('/gsp/returns/sales');
+            returns = await apiAll('/gsp/returns/sales');
             renderTable();
         } catch (e) { showToast(e.message, 'error'); }
     }

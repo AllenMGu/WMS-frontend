@@ -137,14 +137,24 @@ async function api(path, opts = {}) {
     }
     return data;
 }
-async function apiAll(path, pageSize = 500) {
+async function apiAll(path, pageSize = 100) {
     const items = [];
-    for (let offset = 0; ; offset += pageSize) {
+    let previousPageSignature = null;
+    for (let offset = 0, pageNumber = 0; ; offset += pageSize, pageNumber += 1) {
+        if (pageNumber >= 10000) throw new ApiError('分页接口返回页数异常', 0, { path, pageSize });
         const separator = path.includes('?') ? '&' : '?';
         const page = await api(`${path}${separator}limit=${pageSize}&offset=${offset}`);
         if (!Array.isArray(page)) throw new ApiError('分页接口返回格式无效', 0, page);
+        const pageSignature = page.length
+            ? JSON.stringify([page.length, page[0], page[page.length - 1]])
+            : '[]';
+        if (offset > 0 && pageSignature === previousPageSignature) {
+            // 兼容尚未实现 limit/offset 的旧列表接口，避免无限重复第一页。
+            return items;
+        }
         items.push(...page);
         if (page.length < pageSize) return items;
+        previousPageSignature = pageSignature;
     }
 }
 
@@ -215,7 +225,8 @@ function enhanceDataTable(table) {
             row.classList.toggle('hidden', index < start || index >= start + state.pageSize);
         });
         const hasEmptyState = total === 1 && ordered[0].row.cells.length === 1 && ordered[0].row.cells[0].colSpan > 1;
-        pager.classList.toggle('hidden', total <= state.pageSize || hasEmptyState);
+        // 非空表格始终显示总数和当前页；单页时仅禁用上一页/下一页。
+        pager.classList.toggle('hidden', hasEmptyState);
         summary.textContent = `共 ${total} 条，第 ${state.page}/${totalPages} 页`;
         prev.disabled = state.page <= 1;
         next.disabled = state.page >= totalPages;
@@ -608,32 +619,32 @@ function renderShell(activePage, pageTitle) {
 const refCache = {};
 async function refWarehouses(force) {
     if (!force && refCache.warehouses) return refCache.warehouses;
-    refCache.warehouses = await api('/warehouses/');
+    refCache.warehouses = await apiAll('/warehouses/');
     return refCache.warehouses;
 }
 async function refLocations(force) {
     if (!force && refCache.locations) return refCache.locations;
-    refCache.locations = await api('/locations/');
+    refCache.locations = await apiAll('/locations/');
     return refCache.locations;
 }
 async function refGoods(force) {
     if (!force && refCache.goods) return refCache.goods;
-    refCache.goods = await api('/goods/');
+    refCache.goods = await apiAll('/goods/');
     return refCache.goods;
 }
 async function refUsers(force) {
     if (!force && refCache.users) return refCache.users;
-    refCache.users = await api('/users/');
+    refCache.users = await apiAll('/users/');
     return refCache.users;
 }
 async function refQualityUsers(force) {
     if (!force && refCache.qualityUsers) return refCache.qualityUsers;
-    refCache.qualityUsers = await api('/gsp/reference/users');
+    refCache.qualityUsers = await apiAll('/gsp/reference/users');
     return refCache.qualityUsers;
 }
 async function refPartners(force) {
     if (!force && refCache.partners) return refCache.partners;
-    refCache.partners = await api('/gsp/partners');
+    refCache.partners = await apiAll('/gsp/partners');
     return refCache.partners;
 }
 async function refProfiles(force) {

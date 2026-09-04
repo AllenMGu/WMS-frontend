@@ -78,7 +78,7 @@
     }
     async function showPolicies() {
         try {
-            const policies = await api('/gsp/electronic-signatures/policies');
+            const policies = await apiAll('/gsp/electronic-signatures/policies');
             openModal({
                 title: `电子签名策略（${policies.length} 项）`, size: 'lg',
                 body: `

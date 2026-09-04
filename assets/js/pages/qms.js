@@ -38,21 +38,21 @@
         const box = document.getElementById('tabContent');
         box.innerHTML = '<div class="card p-6 text-center"><span class="loading"></span></div>';
         try {
-            if (tab === 'reviews') { cache.reviews = await api('/gsp/quality-system/partner-reviews'); renderReviews(box); }
+            if (tab === 'reviews') { cache.reviews = await apiAll('/gsp/quality-system/partner-reviews'); renderReviews(box); }
             else if (tab === 'risks') {
-                [cache.risks, cache.capas] = await Promise.all([api('/gsp/quality-system/risks'), api('/gsp/quality-system/capas')]); renderRisks(box);
+                [cache.risks, cache.capas] = await Promise.all([apiAll('/gsp/quality-system/risks'), apiAll('/gsp/quality-system/capas')]); renderRisks(box);
             } else if (tab === 'events') {
-                [cache.events, cache.capas] = await Promise.all([api('/gsp/quality-system/events'), api('/gsp/quality-system/capas')]); renderEvents(box);
-            } else if (tab === 'training') { cache.training = await api('/gsp/quality-system/training'); renderTraining(box); }
+                [cache.events, cache.capas] = await Promise.all([apiAll('/gsp/quality-system/events'), apiAll('/gsp/quality-system/capas')]); renderEvents(box);
+            } else if (tab === 'training') { cache.training = await apiAll('/gsp/quality-system/training'); renderTraining(box); }
             else if (tab === 'documents') {
                 [cache.documents, cache.revisions, cache.copies] = await Promise.all([
-                    api('/gsp/quality-system/documents'), api('/gsp/quality-system/documents/revisions'), api('/gsp/quality-system/documents/copies'),
+                    apiAll('/gsp/quality-system/documents'), apiAll('/gsp/quality-system/documents/revisions'), apiAll('/gsp/quality-system/documents/copies'),
                 ]); renderDocuments(box);
             } else if (tab === 'equipment') {
                 [cache.equipment, cache.activities] = await Promise.all([
-                    api('/gsp/quality-system/equipment'), api('/gsp/quality-system/equipment/activities'),
+                    apiAll('/gsp/quality-system/equipment'), apiAll('/gsp/quality-system/equipment/activities'),
                 ]); renderEquipment(box);
-            } else { cache.scopes = await api('/gsp/quality-system/regulated-scopes'); renderScopes(box); }
+            } else { cache.scopes = await apiAll('/gsp/quality-system/regulated-scopes'); renderScopes(box); }
         } catch (e) { box.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`; }
     }
 

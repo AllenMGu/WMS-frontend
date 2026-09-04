@@ -16,8 +16,8 @@
         content().innerHTML = '<div class="card p-6 text-center"><span class="loading"></span></div>';
         try {
             [capas, records] = await Promise.all([
-                api('/gsp/quality-system/capas/me'),
-                api('/gsp/quality-system/training/me'),
+                apiAll('/gsp/quality-system/capas/me'),
+                apiAll('/gsp/quality-system/training/me'),
             ]);
             render();
         } catch (e) {
