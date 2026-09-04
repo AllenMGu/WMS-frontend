@@ -90,7 +90,8 @@ if (errors.length === 0) {
     errors.push("完整分页加载缺少旧接口重复页或异常页数保护");
   }
   const listLoadChecks = [
-    [partners, "apiAll('/gsp/partners')", "合作方"],
+    [partners, "refPartners(force)", "合作方页面"],
+    [common, "refCache.partners = await apiAll('/gsp/partners')", "合作方公共目录"],
     [partners, "apiAll('/gsp/products')", "首营品种"],
     [procurement, "apiAll('/gsp/procurement/orders')", "采购订单"],
     [procurement, "apiAll('/gsp/receiving/receipts')", "采购收货"],
