@@ -168,15 +168,18 @@ async function uploadControlledFile(file, purpose, note) {
 /* 受控附件输入框接线：选文件→上传→自动填 ref/hash/size
  * 状态机保证：
  * - 上传期间锁定文件框与保存按钮（不会把旧引用提交成功）；
- * - 序号守卫丢弃过期响应（快速换文件时晚返回的旧请求不覆盖新选择）；
- * - 成功后仍可再次选择更换，旧对象会被上传人自动停用（未绑定清理）；
- * - 上传失败恢复可操作状态；显式取消会停用已上传对象并清空引用。 */
-async function quietDisableControlledFile(ref) {
+ * - cancel() 使当前请求失效并等待在途上传结束：其创建的受控对象会被
+ *   停用，绝不落表单，也不会在取消后又被回调反写；
+ * - 被取代（stale）的上传响应同样先停用其创建的对象再丢弃；
+ * - 停用失败不吞错：显式取消仅在服务端确认停用后才清空并提示；
+ *   失败时保留引用并提示重试或联系质量人员。 */
+async function disableControlledFile(ref) {
     const key = String(ref || '').replace(/^gspf:/, '');
-    if (!/^[0-9a-f]{32}$/.test(key)) return;
-    try {
-        await api(`/gsp/files/${key}/disable`, { method: 'POST', body: { reason: '表单未提交/更换附件，自动停用未绑定对象' } });
-    } catch (e) { /* 尽力而为：停用失败不阻塞表单 */ }
+    if (!/^[0-9a-f]{32}$/.test(key)) throw new Error('受控文件引用无效，无法停用');
+    await api(`/gsp/files/${key}/disable`, { method: 'POST', body: { reason: '表单未提交/更换附件，停用未绑定对象' } });
+}
+async function quietDisableControlledFile(ref) {
+    try { await disableControlledFile(ref); return true; } catch (e) { return false; }
 }
 function bindControlledFileInput(root, { fileSel, infoSel, refSel, hashSel = null, sizeSel = null, purpose, submitSel = null }) {
     const fileEl = root.querySelector(fileSel);
@@ -184,37 +187,48 @@ function bindControlledFileInput(root, { fileSel, infoSel, refSel, hashSel = nul
     if (!fileEl) return null;
     const info = root.querySelector(infoSel);
     let seq = 0;
-    let lastRef = null; // ref of the most recent server-side upload for this form
+    let inFlight = null;      // promise of the current upload (if any)
+    let lastRef = null;       // ref of the most recent completed upload for this form
     const setInfo = (text, error = false) => { if (info) { info.textContent = text; info.classList && info.classList.toggle('text-red-500', !!error); } };
     const setBusy = (busy) => {
         fileEl.disabled = busy;
         if (submitEl) submitEl.disabled = busy;
     };
     async function doUpload(file) {
-        seq += 1;
-        const my = seq;
+        const my = ++seq;
+        const task = uploadControlledFile(file, purpose);
+        inFlight = task;
         setBusy(true);
         setInfo('受控附件上传中…');
+        let up;
         try {
-            const up = await uploadControlledFile(file, purpose);
-            if (my !== seq) return; // a newer selection superseded this one
-            if (lastRef && lastRef !== up.ref) quietDisableControlledFile(lastRef);
-            lastRef = up.ref;
-            const refEl = root.querySelector(refSel);
-            if (refEl) refEl.value = up.ref;
-            if (hashSel && root.querySelector(hashSel)) root.querySelector(hashSel).value = up.sha256;
-            if (sizeSel && root.querySelector(sizeSel)) root.querySelector(sizeSel).value = up.size_bytes;
-            setInfo(`已上传 ${up.file_name}（${up.content_type}，${up.size_bytes} 字节）${up.ref}；可再次选择文件更换`);
-            setBusy(false);
-            fileEl.title = '再次选择可更换受控附件';
-            if (typeof showToast === 'function') showToast('受控附件已上传并签发引用', 'success');
+            up = await task;
         } catch (e) {
             if (my !== seq) return;
+            inFlight = null;
             setBusy(false);
             fileEl.value = '';
-            setInfo((e && e.message) || '上传失败，请重试', true);
-            if (typeof showToast === 'function') showToast((e && e.message) || '上传失败', 'error');
+            const msg = (e && e.message) || '上传失败，请重试';
+            setInfo(msg, true);
+            if (typeof showToast === 'function') showToast(msg, 'error');
+            return;
         }
+        if (my !== seq) {
+            // Superseded by cancel(): cancel() owns abandoning the created
+            // object and keeps the controls locked until it has settled.
+            return;
+        }
+        inFlight = null;
+        if (lastRef && lastRef !== up.ref) quietDisableControlledFile(lastRef);
+        lastRef = up.ref;
+        const refEl = root.querySelector(refSel);
+        if (refEl) refEl.value = up.ref;
+        if (hashSel && root.querySelector(hashSel)) root.querySelector(hashSel).value = up.sha256;
+        if (sizeSel && root.querySelector(sizeSel)) root.querySelector(sizeSel).value = up.size_bytes;
+        setInfo(`已上传 ${up.file_name}（${up.content_type}，${up.size_bytes} 字节）${up.ref}；可再次选择文件更换`);
+        setBusy(false);
+        fileEl.title = '再次选择可更换受控附件';
+        if (typeof showToast === 'function') showToast('受控附件已上传并签发引用', 'success');
     }
     fileEl.addEventListener('change', () => {
         const file = fileEl.files && fileEl.files[0];
@@ -225,16 +239,42 @@ function bindControlledFileInput(root, { fileSel, infoSel, refSel, hashSel = nul
         hasUpload: () => !!lastRef,
         lastRef: () => lastRef,
         cancel: async () => {
-            if (lastRef) await quietDisableControlledFile(lastRef);
-            lastRef = null;
-            const refEl = root.querySelector(refSel);
-            if (refEl) refEl.value = '';
-            if (hashSel && root.querySelector(hashSel)) root.querySelector(hashSel).value = '';
-            if (sizeSel && root.querySelector(sizeSel)) root.querySelector(sizeSel).value = '';
-            fileEl.value = '';
-            fileEl.disabled = false;
-            if (submitEl) submitEl.disabled = false;
-            setInfo('已取消；重新选择文件可再次上传');
+            seq += 1;                 // invalidate any in-flight upload
+            const waitFor = inFlight;
+            inFlight = null;
+            if (waitFor) {
+                setBusy(true);
+                setInfo('正在停用未绑定附件…');
+                try {
+                    const created = await waitFor;   // let the old response settle
+                    if (created && created.ref) await quietDisableControlledFile(created.ref);
+                } catch (e) { /* upload itself failed; nothing was created */ }
+            }
+            if (!lastRef) {
+                fileEl.value = '';
+                setBusy(false);
+                setInfo('已取消；重新选择文件可再次上传');
+                return;
+            }
+            setBusy(true);
+            setInfo('正在停用并取消…');
+            try {
+                await disableControlledFile(lastRef);   // throws when it fails
+                lastRef = null;
+                const refEl = root.querySelector(refSel);
+                if (refEl) refEl.value = '';
+                if (hashSel && root.querySelector(hashSel)) root.querySelector(hashSel).value = '';
+                if (sizeSel && root.querySelector(sizeSel)) root.querySelector(sizeSel).value = '';
+                fileEl.value = '';
+                setBusy(false);
+                setInfo('已取消并停用原附件；重新选择文件可再次上传');
+                if (typeof showToast === 'function') showToast('已取消并停用原附件', 'success');
+            } catch (e) {
+                setBusy(false);
+                const msg = (e && e.message) || '停用失败，请重试或联系质量人员';
+                setInfo(msg, true);
+                if (typeof showToast === 'function') showToast(msg, 'error');
+            }
         },
     };
 }
