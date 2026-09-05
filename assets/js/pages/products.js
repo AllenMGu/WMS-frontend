@@ -165,7 +165,8 @@ function openProfileModal(goodsId, profileId) {
     modal.querySelector('#gRegDoc').closest('.form-group').insertAdjacentHTML('beforebegin',
         `<div class="form-group"><label class="form-label">上传注册文件受控附件（推荐）</label><input type="file" id="gRegFile" class="input-field" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip,.csv,.txt"><button type="button" id="gRegCancel" class="btn btn-secondary btn-sm mt-2">取消上传并停用</button><div class="text-xs text-gray-500" id="gRegFileInfo">选择文件自动填入注册文件引用；上传后可再选更换</div></div>`);
     const gRegCtl = bindControlledFileInput(modal, { fileSel: '#gRegFile', infoSel: '#gRegFileInfo', refSel: '#gRegDoc', purpose: 'DRUG_REGISTRATION', submitSel: '#gSubmitBtn' });
-    modal.querySelector('#gRegCancel').addEventListener('click', () => gRegCtl.cancel());
+    registerControlledCloseGuard(modal, gRegCtl);
+    modal.querySelector('#gRegCancel').addEventListener('click', () => { gRegCtl.cancel(); });
     modal.querySelector('#gSubmitBtn').addEventListener('click', async () => {
         const gid = Number(modal.querySelector('#gGoods').value);
         const body = {
