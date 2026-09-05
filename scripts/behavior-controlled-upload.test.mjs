@@ -79,6 +79,22 @@ function makeSandbox() {
         if (!reg[id]) reg[id] = element();
         return reg[id];
     };
+    sandbox._toasts = [];
+    sandbox.requestAnimationFrame = (cb) => cb();
+    sandbox._removedModals = [];
+    const closeBtn = () => {
+        const b = element();
+        return b;
+    };
+    sandbox.document.createElement = () => {
+        const el = element();
+        el._close = [closeBtn(), closeBtn()];
+        el.querySelectorAll = (sel) => (sel === '[data-close]' ? el._close : []);
+        el.appendChild = () => {};
+        el.remove = () => { el._removed = true; sandbox._removedModals.push(el); };
+        return el;
+    };
+    sandbox.document.body = { appendChild: () => {} };
     sandbox._makeRoot = () => {
         const reg = {};
         const root = { querySelector: wrapQuery(reg) };
@@ -90,8 +106,8 @@ function makeSandbox() {
 
 const sandbox = makeSandbox();
 vm.runInContext(code, sandbox);
-// common.js defines its own DOM showToast; neutralise it for the harness.
-sandbox.showToast = () => {};
+// common.js defines its own DOM showToast; route it to a spy for assertions.
+sandbox.showToast = (msg) => { sandbox._toasts.push(msg); };
 const bindControlledFileInput = sandbox.bindControlledFileInput;
 assert.equal(typeof bindControlledFileInput, "function", "helper must be loaded");
 
@@ -191,4 +207,42 @@ function selectFile(reg) {
     assert.ok(disables.length >= 2, "old disable attempted and new object abandoned");
 }
 
-console.log("behavior-controlled-upload: 5/5 scenarios passed");
+// 6) guarded close: user affordances (footer 取消 / × / 遮罩) run the cleanup
+//    guard first and only then remove the modal.
+for (const via of ["footer", "x", "mask"]) {
+    const { reg, ctl } = setup();
+    selectFile(reg);
+    const defer = sandbox._pendingUploads[0];
+    defer.res({ ref: "gspf:" + "d".repeat(32), sha256: "e".repeat(64), size_bytes: 9, file_name: "a.pdf", content_type: "application/pdf" });
+    await new Promise(r => setTimeout(r, 0));
+    assert.equal(reg["upRef"].value, "gspf:" + "d".repeat(32), "uploaded before closing");
+    const modal = sandbox.openModal({ title: "t", body: "<div id='body'></div>", footer: "<button data-close>取消</button>" });
+    sandbox.registerControlledCloseGuard(modal, ctl);
+    if (via === "footer") modal._close[1].fire("click");
+    else if (via === "x") modal._close[0].fire("click");
+    else modal.fire("click", { target: modal });  // mask click
+    await new Promise(r => setTimeout(r, 250));    // closeModal animation delay
+    assert.equal(modal._removed, true, `modal closed via ${via} after cleanup`);
+    const disables = sandbox._fetchLog.filter(x => x.kind === "disable");
+    assert.ok(disables.length >= 1, `unbound upload disabled before ${via} close`);
+}
+
+// 7) guarded close is blocked when the disable fails; error surfaced, modal kept
+{
+    const { reg, ctl } = setup();
+    selectFile(reg);
+    const defer = sandbox._pendingUploads[0];
+    defer.res({ ref: "gspf:" + "a".repeat(32), sha256: "e".repeat(64), size_bytes: 9, file_name: "a.pdf", content_type: "application/pdf" });
+    await new Promise(r => setTimeout(r, 0));
+    sandbox._disableShouldFail = true;
+    sandbox._toasts = [];
+    const modal = sandbox.openModal({ title: "t", body: "", footer: "<button data-close>取消</button>" });
+    sandbox.registerControlledCloseGuard(modal, ctl);
+    modal._close[1].fire("click");
+    await new Promise(r => setTimeout(r, 300));
+    assert.notEqual(modal._removed, true, "modal stays open when cleanup fails");
+    assert.equal(reg["upRef"].value, "gspf:" + "a".repeat(32), "retryable ref preserved");
+    assert.ok(sandbox._toasts.length > 0, "error toast shown");
+}
+
+console.log("behavior-controlled-upload: 7/7 scenarios passed");
