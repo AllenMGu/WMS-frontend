@@ -751,6 +751,7 @@ const NAV_GROUPS = [
         { page: 'signatures.html', icon: 'fa-pencil-square-o', label: '电子签名台账' },
         { page: 'audit.html', icon: 'fa-shield', label: '审计追踪' },
         { page: 'operations.html', icon: 'fa-gears', label: '运维合规' },
+        { page: 'reports.html', icon: 'fa-print', label: '业务报表' },
         { page: 'legacy-archive.html', icon: 'fa-archive', label: '老 GSP 历史归档' },
     ]},
 ];
