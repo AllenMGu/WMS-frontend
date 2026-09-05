@@ -17,6 +17,7 @@ const modules = [
   "products",
   "qms",
   "recalls",
+  "reports",
   "returns",
   "sales",
   "signatures",
