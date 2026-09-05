@@ -9,6 +9,7 @@
     let current = null;   // {key,title,production_ready,columns}
     let page = { rows: [], rowKeys: [], total: 0, offset: 0, limit: 20, hasMore: false };
     const PAGE_SIZE = 20;
+    let printsPage = { offset: 0, limit: 20, total: 0, hasMore: false };
 
     async function pageInit(el) { _el = el || document.getElementById('pageContent'); await listReports(); }
 
@@ -21,8 +22,11 @@
         content().innerHTML = `
         <div class="alert alert-info mb-3"><i class="fa fa-print mr-2"></i>业务报表：正式台账（含电子签名/审计）与开发预览；受控打印件可追溯、可校验哈希。</div>
         <div class="grid grid-2 gap-4" id="rptCards"></div>
-        <div class="card mt-4"><div class="card-header"><span class="card-title"><i class="fa fa-history mr-2"></i>受控打印台账</span></div>
-          <div class="card-body p-0 table-wrap"><table class="data-table"><thead><tr><th>编号</th><th>状态</th><th>报表</th><th>行数/总数</th><th>说明</th><th>操作</th></tr></thead>
+        <div class="card mt-4"><div class="card-header"><span class="card-title"><i class="fa fa-history mr-2"></i>打印记录台账（正式受控 / 开发预览）</span>
+            <div class="flex items-center gap-2"><span class="text-xs text-gray-500" id="rptPrintsSum"></span>
+            <button type="button" class="btn btn-secondary btn-sm" id="rptPrv">上一页</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="rptNext">下一页</button></div></div>
+          <div class="card-body p-0 table-wrap"><table class="data-table" data-no-pagination="true"><thead><tr><th>编号</th><th>状态</th><th>报表</th><th>行数/总数</th><th>说明</th><th>操作</th></tr></thead>
           <tbody id="rptPrints"></tbody></table></div></div>`;
         const holder = content().querySelector('#rptCards');
         holder.innerHTML = catalog.map(r => `
@@ -51,12 +55,12 @@
             ${current.production_ready ? '<span class="badge badge-success ml-2">正式</span>' : '<span class="badge badge-warning ml-2">开发预览</span>'}</div>
           <div class="flex gap-2">
             <button class="btn btn-secondary btn-sm" id="rbBack"><i class="fa fa-arrow-left"></i> 返回目录</button>
-            <button class="btn btn-primary btn-sm" id="rbPrint"><i class="fa fa-print"></i> 受控打印</button>
-            ${current.production_ready ? '' : '<button class="btn btn-warning btn-sm" id="rbPreview"><i class="fa fa-flask"></i> 生成开发预览件</button>'}
+            ${current.production_ready ? '<button class="btn btn-primary btn-sm" id="rbPrint"><i class="fa fa-print"></i> 受控打印</button>'
+                                       : '<button class="btn btn-warning btn-sm" id="rbPreview"><i class="fa fa-flask"></i> 生成开发预览件</button>'}
           </div>
         </div>
         <div class="card"><div class="card-body p-0 table-wrap">
-          <table class="data-table"><thead id="rbHead"></thead><tbody id="rbBody"></tbody></table>
+          <table class="data-table" data-no-pagination="true"><thead id="rbHead"></thead><tbody id="rbBody"></tbody></table>
         </div></div>
         <div class="filter-bar justify-between p-2">
           <span class="text-xs text-gray-500" id="rbSummary"></span>
@@ -66,7 +70,8 @@
           </div>
         </div>`;
         content().querySelector('#rbBack').addEventListener('click', listReports);
-        content().querySelector('#rbPrint').addEventListener('click', () => promptPrint(false));
+        const bp = content().querySelector('#rbPrint');
+        if (bp) bp.addEventListener('click', () => promptPrint(false));
         const pv = content().querySelector('#rbPreview');
         if (pv) pv.addEventListener('click', () => promptPrint(true));
         content().querySelector('#rbPrev').addEventListener('click', () => { page.offset = Math.max(0, page.offset - PAGE_SIZE); return loadRows(); });
@@ -111,7 +116,7 @@
         modal.querySelector('#rpGo').addEventListener('click', async () => {
             const reason = modal.querySelector('#rpReason').value.trim();
             if (reason.length < 3) { showToast('原因不能少于3个字', 'warning'); return; }
-            const body = { reason, limit: preview ? PAGE_SIZE : page.limit, offset: preview ? 0 : page.offset, preview };
+            const body = { reason, limit: page.limit, offset: page.offset, preview };
             if (modal.querySelector('#rpCover').checked) body.cover_all = true;
             try {
                 const res = await api(`/gsp/reports/${current.key}/print`, { method: 'POST', body });
@@ -122,7 +127,8 @@
     }
 
     function showPreviewPrint(res) {
-        const modal = openModal({ title: `打印件 ${res.copy_no}`, size: 'lg',
+        const preview = String(res.copy_no || '').startsWith('PREVIEW-');
+        const modal = openModal({ title: `${preview ? '开发预览件' : '受控打印件'} ${res.copy_no}`, size: 'lg',
             body: `<div class="text-xs text-gray-500 mb-2">内容哈希 ${res.content_hash}</div>
                    <iframe id="rpIframe" style="width:100%;height:60vh;border:1px solid #ccc"></iframe>`,
             footer: `<button class="btn btn-secondary" data-close>关闭</button>
@@ -136,17 +142,20 @@
         modal.querySelector('#rpVerify').addEventListener('click', async () => {
             try {
                 const v = await api(`/gsp/reports/prints/${res.print_id}/verify`, { method: 'POST', body: {} });
-                showToast(v.valid ? '校验通过：内容与受控记录一致' : '校验失败：内容与记录不符', v.valid ? 'success' : 'error');
+                showToast(v.valid ? (preview ? '校验通过：预览记录内容与后端快照一致' : '校验通过：内容与受控记录一致') : (preview ? '校验失败：预览记录与快照不符' : '校验失败：内容与记录不符'), v.valid ? 'success' : 'error');
             } catch (e) { showToast(e.message, 'error'); }
         });
         setTimeout(() => loadPrints(), 300);
     }
 
-    async function loadPrints() {
+    async function loadPrints(reset = true) {
         const body = content().querySelector('#rptPrints');
         if (!body) return;
+        if (reset) printsPage.offset = 0;
         try {
-            const data = await api('/gsp/reports/prints/list?limit=50');
+            const data = await api(`/gsp/reports/prints/list?limit=${printsPage.limit}&offset=${printsPage.offset}`);
+            printsPage.total = data.total;
+            printsPage.hasMore = data.has_more;
             body.innerHTML = data.items.length ? data.items.map(p => `
               <tr>
                 <td class="text-xs">${escV(p.copy_no)}</td>
@@ -156,14 +165,22 @@
                 <td class="text-xs" style="max-width:220px">${escV(p.purpose)}</td>
                 <td><button class="btn btn-link btn-sm" data-fetch="${p.id}">取回</button><button class="btn btn-link btn-sm" data-verify="${p.id}">校验</button></td>
               </tr>`).join('')
-              : '<tr><td colspan="6" class="empty-state">暂无受控打印记录</td></tr>';
+              : '<tr><td colspan="6" class="empty-state">暂无打印记录</td></tr>';
+            const sum = content().querySelector('#rptPrintsSum');
+            if (sum) sum.textContent = `共 ${printsPage.total} 条`;
+            const prv = content().querySelector('#rptPrv');
+            const nxt = content().querySelector('#rptNext');
+            if (prv) { prv.disabled = printsPage.offset <= 0; prv.onclick = () => { printsPage.offset = Math.max(0, printsPage.offset - printsPage.limit); return loadPrints(false); }; }
+            if (nxt) { nxt.disabled = !printsPage.hasMore; nxt.onclick = () => { printsPage.offset += printsPage.limit; return loadPrints(false); }; }
             body.querySelectorAll('[data-fetch]').forEach(b => b.addEventListener('click', async () => {
                 const rec = await api(`/gsp/reports/prints/${b.dataset.fetch}`);
                 showPreviewPrint(rec);
             }));
             body.querySelectorAll('[data-verify]').forEach(b => b.addEventListener('click', async () => {
+                const rec = await api(`/gsp/reports/prints/${b.dataset.verify}`);
                 const v = await api(`/gsp/reports/prints/${b.dataset.verify}/verify`, { method: 'POST', body: {} });
-                showToast(v.valid ? '校验通过' : '校验失败', v.valid ? 'success' : 'error');
+                const preview = String(rec.copy_no || '').startsWith('PREVIEW-');
+                showToast(v.valid ? (preview ? '校验通过：预览记录与快照一致' : '校验通过') : '校验失败', v.valid ? 'success' : 'error');
             }));
         } catch (e) { body.innerHTML = '<tr><td colspan="6" class="empty-state">加载失败</td></tr>'; }
     }
