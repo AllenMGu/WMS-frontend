@@ -105,6 +105,7 @@ class ApiError extends Error {
 function extractDetailMessage(detail) {
     if (!detail) return '请求失败';
     if (typeof detail === 'string') return detail;
+    if (detail && typeof detail === 'object' && detail.detail) return String(detail.detail);
     if (detail.message) {
         if (detail.findings && detail.findings.length) {
             return detail.message + '：' + detail.findings.map(f => `${f.code || ''}${f.message || ''}`).join('；');
@@ -137,6 +138,184 @@ async function api(path, opts = {}) {
     }
     return data;
 }
+/* 受控附件上传：POST /api/gsp/files（multipart），返回 {ref, sha256, size_bytes, ...} */
+async function uploadControlledFile(file, purpose, note) {
+    const token = getToken();
+    if (!token) throw new ApiError('未登录', 401, null);
+    const fd = new FormData();
+    fd.append('file', file, file.name || 'evidence.bin');
+    fd.append('purpose', purpose || 'OTHER');
+    if (note) fd.append('note', String(note).slice(0, 500));
+    let res;
+    try {
+        res = await fetch(`${API_BASE_URL}/gsp/files`, {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + token },
+            body: fd,
+        });
+    } catch (e) {
+        throw new ApiError('网络请求失败，请检查后端服务是否可用', 0, null);
+    }
+    const text = await res.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
+    if (!res.ok) {
+        if (res.status === 401) { logout(); throw new ApiError('登录已过期，请重新登录', 401, null); }
+        throw new ApiError(extractDetailMessage(data), res.status, data);
+    }
+    return data; // ControlledFileOut
+}
+
+/* 受控附件输入框接线：选文件→上传→自动填 ref/hash/size
+ * 状态机保证：
+ * - 上传期间锁定文件框与保存按钮（不会把旧引用提交成功）；
+ * - cancel() 使当前请求失效并等待在途上传结束：其创建的受控对象会被
+ *   停用，绝不落表单，也不会在取消后又被回调反写；
+ * - 被取代（stale）的上传响应同样先停用其创建的对象再丢弃；
+ * - 停用失败不吞错：显式取消仅在服务端确认停用后才清空并提示；
+ *   失败时保留引用并提示重试或联系质量人员。 */
+async function disableControlledFile(ref) {
+    const key = String(ref || '').replace(/^gspf:/, '');
+    if (!/^[0-9a-f]{32}$/.test(key)) throw new Error('受控文件引用无效，无法停用');
+    await api(`/gsp/files/${key}/disable`, { method: 'POST', body: { reason: '表单未提交/更换附件，停用未绑定对象' } });
+}
+async function quietDisableControlledFile(ref) {
+    try { await disableControlledFile(ref); return true; } catch (e) { return false; }
+}
+function bindControlledFileInput(root, { fileSel, infoSel, refSel, hashSel = null, sizeSel = null, purpose, submitSel = null }) {
+    const fileEl = root.querySelector(fileSel);
+    const submitEl = submitSel ? root.querySelector(submitSel) : null;
+    if (!fileEl) return null;
+    const info = root.querySelector(infoSel);
+    let seq = 0;
+    let inFlight = null;      // promise of the current upload (if any)
+    let lastRef = null;       // ref of the most recent completed upload for this form
+    const setInfo = (text, error = false) => { if (info) { info.textContent = text; info.classList && info.classList.toggle('text-red-500', !!error); } };
+    const setBusy = (busy) => {
+        fileEl.disabled = busy;
+        if (submitEl) submitEl.disabled = busy;
+    };
+    async function doUpload(file) {
+        const my = ++seq;
+        const task = uploadControlledFile(file, purpose);
+        inFlight = task;
+        setBusy(true);
+        setInfo('受控附件上传中…');
+        let up;
+        try {
+            up = await task;
+        } catch (e) {
+            if (my !== seq) return;
+            inFlight = null;
+            setBusy(false);
+            fileEl.value = '';
+            const msg = (e && e.message) || '上传失败，请重试';
+            setInfo(msg, true);
+            if (typeof showToast === 'function') showToast(msg, 'error');
+            return;
+        }
+        if (my !== seq) {
+            // Superseded by cancel(): cancel() owns abandoning the created
+            // object and keeps the controls locked until it has settled.
+            return;
+        }
+        inFlight = null;
+        if (lastRef && lastRef !== up.ref) {
+            // Replacing an existing upload: confirm the old object is retired
+            // before the form switches to the new reference.
+            try {
+                await disableControlledFile(lastRef);
+            } catch (e) {
+                // Do not lose the old reference; retire the just-created object
+                // best-effort and surface the failure.
+                await quietDisableControlledFile(up.ref);
+                setBusy(false);
+                fileEl.value = '';
+                const msg = `更换失败：${(e && e.message) || '未能停用旧附件，请重试或联系质量人员'}`;
+                setInfo(msg, true);
+                if (typeof showToast === 'function') showToast(msg, 'error');
+                return;
+            }
+        }
+        lastRef = up.ref;
+        const refEl = root.querySelector(refSel);
+        if (refEl) refEl.value = up.ref;
+        if (hashSel && root.querySelector(hashSel)) root.querySelector(hashSel).value = up.sha256;
+        if (sizeSel && root.querySelector(sizeSel)) root.querySelector(sizeSel).value = up.size_bytes;
+        setInfo(`已上传 ${up.file_name}（${up.content_type}，${up.size_bytes} 字节）${up.ref}；可再次选择文件更换`);
+        setBusy(false);
+        fileEl.title = '再次选择可更换受控附件';
+        if (typeof showToast === 'function') showToast('受控附件已上传并签发引用', 'success');
+    }
+    fileEl.addEventListener('change', () => {
+        const file = fileEl.files && fileEl.files[0];
+        if (file) doUpload(file);
+    });
+    return {
+        uploading: () => fileEl.disabled,
+        hasUpload: () => !!lastRef,
+        lastRef: () => lastRef,
+        cancel: async () => {
+            seq += 1;                 // invalidate any in-flight upload
+            const waitFor = inFlight;
+            inFlight = null;
+            if (waitFor) {
+                setBusy(true);
+                setInfo('正在停用未绑定附件…');
+                try {
+                    const created = await waitFor;   // let the old response settle
+                    if (created && created.ref) {
+                        try {
+                            await disableControlledFile(created.ref);
+                        } catch (e) {
+                            // Disable failed: keep the created ref retryable and
+                            // surface the error -- do not claim cancel success.
+                            lastRef = created.ref;
+                            const refEl = root.querySelector(refSel);
+                            if (refEl) refEl.value = created.ref;
+                            if (hashSel && root.querySelector(hashSel)) root.querySelector(hashSel).value = created.sha256 || '';
+                            if (sizeSel && root.querySelector(sizeSel)) root.querySelector(sizeSel).value = created.size_bytes || '';
+                            fileEl.value = '';
+                            setBusy(false);
+                            const msg = `取消失败：${(e && e.message) || '未能停用新上传的附件，请重试或联系质量人员'}`;
+                            setInfo(msg, true);
+                            if (typeof showToast === 'function') showToast(msg, 'error');
+                            return false;
+                        }
+                    }
+                } catch (e) { /* upload itself failed; nothing was created */ }
+            }
+            if (!lastRef) {
+                fileEl.value = '';
+                setBusy(false);
+                setInfo('已取消；重新选择文件可再次上传');
+                return true;
+            }
+            setBusy(true);
+            setInfo('正在停用并取消…');
+            try {
+                await disableControlledFile(lastRef);   // throws when it fails
+                lastRef = null;
+                const refEl = root.querySelector(refSel);
+                if (refEl) refEl.value = '';
+                if (hashSel && root.querySelector(hashSel)) root.querySelector(hashSel).value = '';
+                if (sizeSel && root.querySelector(sizeSel)) root.querySelector(sizeSel).value = '';
+                fileEl.value = '';
+                setBusy(false);
+                setInfo('已取消并停用原附件；重新选择文件可再次上传');
+                if (typeof showToast === 'function') showToast('已取消并停用原附件', 'success');
+                return true;
+            } catch (e) {
+                setBusy(false);
+                const msg = (e && e.message) || '停用失败，请重试或联系质量人员';
+                setInfo(msg, true);
+                if (typeof showToast === 'function') showToast(msg, 'error');
+                return false;
+            }
+        },
+    };
+}
+
 async function apiAll(path, pageSize = 100) {
     const items = [];
     let previousPageSignature = null;
@@ -406,17 +585,46 @@ function openModal({ title = '', body = '', footer = '', size = 'md' }) {
             <div class="modal-body">${body}</div>
             ${footer ? `<div class="modal-footer">${footer}</div>` : ''}
         </div>`;
-    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
+    modal.addEventListener('click', (e) => { if (e.target === modal) requestModalClose(modal); });
     // 绑定所有 data-close 元素（标题栏 × 与底部“取消”按钮），避免只绑到第一个
-    modal.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', () => closeModal(modal)));
+    modal.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', () => requestModalClose(modal)));
     document.body.appendChild(modal);
     requestAnimationFrame(() => modal.classList.add('show'));
     return modal;
+}
+function requestModalClose(modal) {
+    // User-initiated close (footer 取消 / 标题栏 × / 遮罩). Single-flight: the
+    // optional awaitable cleanup guard runs at most once per attempt; repeated
+    // triggers while a cleanup is pending are ignored, so a second trigger can
+    // never bypass an in-flight guard. On failure the pending state is cleared
+    // so the user can retry; on success the modal is removed exactly once.
+    if (!modal) return;
+    if (modal.__closing) return;                 // cleanup already in progress
+    if (!modal.__guardedClose) { closeModal(modal); return; }
+    modal.__closing = true;
+    Promise.resolve(modal.__guardedClose()).then(
+        () => { modal.__closing = false; closeModal(modal); },
+        (err) => {
+            modal.__closing = false;
+            const msg = (err && err.message) || '存在未处置的受控附件，关闭已阻止：请重试或联系质量人员';
+            if (typeof showToast === 'function') showToast(msg, 'error');
+        }
+    );
 }
 function closeModal(modal) {
     if (!modal) return;
     modal.classList.remove('show');
     setTimeout(() => modal.remove(), 200);
+}
+function registerControlledCloseGuard(modal, ctl) {
+    // Awaitable before-close cleanup for controlled-upload modals: retires any
+    // uploaded-but-unbound attachment before the modal may close; a failed
+    // disable throws so the close is blocked and the reference stays retryable.
+    modal.__guardedClose = async () => {
+        if (!ctl || (!ctl.uploading() && !ctl.hasUpload())) return;
+        const ok = await ctl.cancel();
+        if (!ok) throw new Error('未能停用已上传的受控附件，关闭已阻止：请重试或联系质量人员');
+    };
 }
 function confirmModal(message, onOk, okText = '确认') {
     const modal = openModal({
