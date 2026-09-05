@@ -202,3 +202,6 @@ if (errors.length) {
 }
 
 console.log(`已验证 ${modules.length} 个 SPA 模块、运行时配置、岗位访问、审计原因和关键 GSP 控制。`);
+
+// Also run the controlled-upload behaviour regression suite.
+await import("./behavior-controlled-upload.test.mjs");
