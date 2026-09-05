@@ -245,4 +245,37 @@ for (const via of ["footer", "x", "mask"]) {
     assert.ok(sandbox._toasts.length > 0, "error toast shown");
 }
 
-console.log("behavior-controlled-upload: 7/7 scenarios passed");
+// 8) duplicate close while cleanup is pending: single-flight, one cleanup chain
+for (const outcome of ["ok", "fail"]) {
+    const { reg, ctl } = setup();
+    selectFile(reg);                      // upload starts (pending)
+    sandbox._toasts = [];
+    const modal = sandbox.openModal({ title: "t", body: "", footer: "<button data-close>取消</button>" });
+    sandbox.registerControlledCloseGuard(modal, ctl);
+    modal._close[1].fire("click");        // footer cancel -> cleanup starts
+    modal._close[0].fire("click");        // × while cleanup pending -> must be ignored
+    modal.fire("click", { target: modal }); // mask while cleanup pending -> ignored
+    if (outcome === "fail") sandbox._disableShouldFail = true;
+    const defer = sandbox._pendingUploads[0];
+    defer.res({ ref: "gspf:" + "b".repeat(32), sha256: "e".repeat(64), size_bytes: 9, file_name: "a.pdf", content_type: "application/pdf" });
+    await new Promise(r => setTimeout(r, 300));
+    const disables = sandbox._fetchLog.filter(x => x.kind === "disable");
+    if (outcome === "ok") {
+        assert.equal(modal._removed, true, "closed once after successful cleanup");
+        assert.equal(disables.length, 1, "single cleanup chain on success");
+    } else {
+        assert.notEqual(modal._removed, true, "modal retained when cleanup fails");
+        assert.equal(disables.length, 1, "single cleanup chain despite double triggers");
+        assert.equal(reg["upRef"].value, "gspf:" + "b".repeat(32), "retryable ref preserved");
+        assert.ok(sandbox._toasts.length > 0, "error toast shown");
+        // failure clears the single-flight lock: retry may now succeed
+        sandbox._disableShouldFail = false;
+        sandbox._fetchLog.length = 0;
+        modal._close[1].fire("click");
+        await new Promise(r => setTimeout(r, 300));
+        assert.equal(modal._removed, true, "retry after failure closes the modal");
+        assert.equal(sandbox._fetchLog.filter(x => x.kind === "disable").length, 1, "retry cleanup chain runs once");
+    }
+}
+
+console.log("behavior-controlled-upload: 9/9 scenarios passed");
