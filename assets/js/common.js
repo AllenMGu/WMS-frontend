@@ -280,7 +280,7 @@ function bindControlledFileInput(root, { fileSel, infoSel, refSel, hashSel = nul
                             const msg = `取消失败：${(e && e.message) || '未能停用新上传的附件，请重试或联系质量人员'}`;
                             setInfo(msg, true);
                             if (typeof showToast === 'function') showToast(msg, 'error');
-                            return;
+                            return false;
                         }
                     }
                 } catch (e) { /* upload itself failed; nothing was created */ }
@@ -289,7 +289,7 @@ function bindControlledFileInput(root, { fileSel, infoSel, refSel, hashSel = nul
                 fileEl.value = '';
                 setBusy(false);
                 setInfo('已取消；重新选择文件可再次上传');
-                return;
+                return true;
             }
             setBusy(true);
             setInfo('正在停用并取消…');
@@ -304,11 +304,13 @@ function bindControlledFileInput(root, { fileSel, infoSel, refSel, hashSel = nul
                 setBusy(false);
                 setInfo('已取消并停用原附件；重新选择文件可再次上传');
                 if (typeof showToast === 'function') showToast('已取消并停用原附件', 'success');
+                return true;
             } catch (e) {
                 setBusy(false);
                 const msg = (e && e.message) || '停用失败，请重试或联系质量人员';
                 setInfo(msg, true);
                 if (typeof showToast === 'function') showToast(msg, 'error');
+                return false;
             }
         },
     };
@@ -583,17 +585,39 @@ function openModal({ title = '', body = '', footer = '', size = 'md' }) {
             <div class="modal-body">${body}</div>
             ${footer ? `<div class="modal-footer">${footer}</div>` : ''}
         </div>`;
-    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
+    modal.addEventListener('click', (e) => { if (e.target === modal) requestModalClose(modal); });
     // 绑定所有 data-close 元素（标题栏 × 与底部“取消”按钮），避免只绑到第一个
-    modal.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', () => closeModal(modal)));
+    modal.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', () => requestModalClose(modal)));
     document.body.appendChild(modal);
     requestAnimationFrame(() => modal.classList.add('show'));
     return modal;
+}
+function requestModalClose(modal) {
+    // User-initiated close (footer 取消 / 标题栏 × / 遮罩). Runs the optional
+    // awaitable cleanup guard first; only removes the modal when it succeeds.
+    if (!modal || !modal.__guardedClose) { closeModal(modal); return; }
+    Promise.resolve(modal.__guardedClose()).then(
+        () => closeModal(modal),
+        (err) => {
+            const msg = (err && err.message) || '存在未处置的受控附件，关闭已阻止：请重试或联系质量人员';
+            if (typeof showToast === 'function') showToast(msg, 'error');
+        }
+    );
 }
 function closeModal(modal) {
     if (!modal) return;
     modal.classList.remove('show');
     setTimeout(() => modal.remove(), 200);
+}
+function registerControlledCloseGuard(modal, ctl) {
+    // Awaitable before-close cleanup for controlled-upload modals: retires any
+    // uploaded-but-unbound attachment before the modal may close; a failed
+    // disable throws so the close is blocked and the reference stays retryable.
+    modal.__guardedClose = async () => {
+        if (!ctl || (!ctl.uploading() && !ctl.hasUpload())) return;
+        const ok = await ctl.cancel();
+        if (!ok) throw new Error('未能停用已上传的受控附件，关闭已阻止：请重试或联系质量人员');
+    };
 }
 function confirmModal(message, onOk, okText = '确认') {
     const modal = openModal({
