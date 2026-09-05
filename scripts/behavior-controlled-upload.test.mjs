@@ -158,4 +158,37 @@ function selectFile(reg) {
     assert.equal(reg["upSubmit"].disabled, false);
 }
 
-console.log("behavior-controlled-upload: 3/3 scenarios passed");
+// 4) cancel during in-flight upload: disable failure keeps the created ref
+{
+    const { reg, ctl } = setup();
+    selectFile(reg);
+    const defer = sandbox._pendingUploads[0];
+    sandbox._disableShouldFail = true;
+    const done = ctl.cancel();
+    defer.res({ ref: "gspf:" + "a".repeat(32), sha256: "h".repeat(64), size_bytes: 9, file_name: "a.pdf", content_type: "application/pdf" });
+    await done;
+    assert.equal(reg["upRef"].value, "gspf:" + "a".repeat(32), "failed abandon keeps created ref for retry");
+    assert.match(reg["upInfo"].textContent, /取消失败|停用失败/, "failure surfaced");
+    assert.equal(reg["upSubmit"].disabled, false, "controls reopened for retry");
+}
+
+// 5) replacement whose old-file disable fails keeps the old reference
+{
+    const { reg, ctl } = setup();
+    selectFile(reg);
+    let defer = sandbox._pendingUploads[0];
+    defer.res({ ref: "gspf:" + "b".repeat(32), sha256: "j".repeat(64), size_bytes: 9, file_name: "a.pdf", content_type: "application/pdf" });
+    await new Promise(r => setTimeout(r, 0));
+    assert.equal(reg["upRef"].value, "gspf:" + "b".repeat(32));
+    sandbox._disableShouldFail = true;
+    selectFile(reg);                     // choose a replacement file
+    defer = sandbox._pendingUploads[1];
+    defer.res({ ref: "gspf:" + "c".repeat(32), sha256: "l".repeat(64), size_bytes: 9, file_name: "b.pdf", content_type: "application/pdf" });
+    await new Promise(r => setTimeout(r, 0));
+    assert.equal(reg["upRef"].value, "gspf:" + "b".repeat(32), "old ref kept when its disable fails");
+    assert.match(reg["upInfo"].textContent, /更换失败/, "replacement failure surfaced");
+    const disables = sandbox._fetchLog.filter(x => x.kind === "disable");
+    assert.ok(disables.length >= 2, "old disable attempted and new object abandoned");
+}
+
+console.log("behavior-controlled-upload: 5/5 scenarios passed");
