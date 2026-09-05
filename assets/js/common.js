@@ -137,6 +137,60 @@ async function api(path, opts = {}) {
     }
     return data;
 }
+/* 受控附件上传：POST /api/gsp/files（multipart），返回 {ref, sha256, size_bytes, ...} */
+async function uploadControlledFile(file, purpose, note) {
+    const token = getToken();
+    if (!token) throw new ApiError('未登录', 401, null);
+    const fd = new FormData();
+    fd.append('file', file, file.name || 'evidence.bin');
+    fd.append('purpose', purpose || 'OTHER');
+    if (note) fd.append('note', String(note).slice(0, 500));
+    let res;
+    try {
+        res = await fetch(`${API_BASE_URL}/gsp/files`, {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + token },
+            body: fd,
+        });
+    } catch (e) {
+        throw new ApiError('网络请求失败，请检查后端服务是否可用', 0, null);
+    }
+    const text = await res.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
+    if (!res.ok) {
+        if (res.status === 401) { logout(); throw new ApiError('登录已过期，请重新登录', 401, null); }
+        throw new ApiError(extractDetailMessage(data), res.status, data);
+    }
+    return data; // ControlledFileOut
+}
+
+/* 受控附件输入框接线：选文件→上传→自动填 ref/hash/size */
+function bindControlledFileInput(root, { fileSel, infoSel, refSel, hashSel = null, sizeSel = null, purpose }) {
+    const fileEl = root.querySelector(fileSel);
+    if (!fileEl) return;
+    fileEl.addEventListener('change', async () => {
+        const file = fileEl.files && fileEl.files[0];
+        if (!file) return;
+        const info = root.querySelector(infoSel);
+        if (info) { info.textContent = '上传中...'; info.classList && info.classList.remove('text-red-500'); }
+        try {
+            const up = await uploadControlledFile(file, purpose);
+            const refEl = root.querySelector(refSel);
+            if (refEl) refEl.value = up.ref;
+            if (hashSel && root.querySelector(hashSel)) root.querySelector(hashSel).value = up.sha256;
+            if (sizeSel && root.querySelector(sizeSel)) root.querySelector(sizeSel).value = up.size_bytes;
+            if (info) info.textContent = `已上传 ${up.file_name}（${up.content_type}，${up.size_bytes} 字节）${up.ref}`;
+            fileEl.disabled = true;
+            if (typeof showToast === 'function') showToast('受控附件已上传并签发 gspf 引用', 'success');
+        } catch (e) {
+            if (info) { info.textContent = e.message || '上传失败'; if (info.classList) info.classList.add('text-red-500'); }
+            if (typeof showToast === 'function') showToast(e.message || '上传失败', 'error');
+            fileEl.value = '';
+        }
+    });
+}
+
 async function apiAll(path, pageSize = 100) {
     const items = [];
     let previousPageSignature = null;

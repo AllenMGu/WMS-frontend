@@ -189,6 +189,9 @@ async function viewCarrier(id) {
                     <div class="form-group"><label class="form-label">登记原因 *（≥3字）</label><textarea id="ddReason" class="input-field" rows="2"></textarea></div>`,
                 footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="ddSubmit">保存</button>`,
             });
+            m2.querySelector('#ddRef').closest('.form-group').insertAdjacentHTML('beforebegin',
+                `<div class="form-group"><label class="form-label">上传受控附件（推荐）</label><input type="file" id="ddFile" class="input-field" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip,.csv,.txt"><div class="text-xs text-gray-500" id="ddFileInfo">选择文件后自动上传并填入 file_ref</div></div>`);
+            bindControlledFileInput(m2, { fileSel: '#ddFile', infoSel: '#ddFileInfo', refSel: '#ddRef', purpose: 'CARRIER_DOCUMENT' });
             m2.querySelector('#ddSubmit').addEventListener('click', async () => {
                 const body = {
                     document_type: m2.querySelector('#ddType').value,

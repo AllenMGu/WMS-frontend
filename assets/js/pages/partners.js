@@ -286,6 +286,9 @@
             footer: '<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="spaSubmit">保存并待独立审批</button>',
         });
         if (goodsId) modal.querySelector('#spaGoods').value = goodsId;
+        modal.querySelector('#spaRef').closest('.form-row').insertAdjacentHTML('afterend',
+            `<div class="form-group"><label class="form-label">上传受控授权文件（推荐）</label><input type="file" id="spaFile" class="input-field" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip,.csv,.txt"><div class="text-xs text-gray-500" id="spaFileInfo">选择文件后自动填入 引用/SHA-256/大小</div></div>`);
+        bindControlledFileInput(modal, { fileSel: '#spaFile', infoSel: '#spaFileInfo', refSel: '#spaRef', hashSel: '#spaHash', sizeSel: '#spaSize', purpose: 'SUPPLIER_PRODUCT_AUTHORIZATION' });
         modal.querySelector('#spaSubmit').addEventListener('click', async () => {
             const body = { goods_id: Number(modal.querySelector('#spaGoods').value), authorization_ref: modal.querySelector('#spaRef').value.trim(), authorization_sha256: modal.querySelector('#spaHash').value.trim().toLowerCase(), authorization_size_bytes: Number(modal.querySelector('#spaSize').value), scope_description: modal.querySelector('#spaScope').value.trim(), valid_from: modal.querySelector('#spaFrom').value, valid_to: modal.querySelector('#spaTo').value, reason: modal.querySelector('#spaReason').value.trim() };
             if (!body.goods_id || body.authorization_ref.length < 3 || body.scope_description.length < 3 || !body.valid_from || !body.valid_to || !/^[0-9a-f]{64}$/.test(body.authorization_sha256) || body.authorization_size_bytes < 1 || body.reason.length < 3) return showToast('请完整填写授权范围、有效期和文件完整性证据', 'warning');
@@ -414,6 +417,9 @@
         `,
             footer: `<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="dSubmitBtn">保存</button>`,
         });
+        modal.querySelector('#dRef').closest('.form-group').insertAdjacentHTML('beforebegin',
+            `<div class="form-group"><label class="form-label">上传受控附件（推荐）</label><input type="file" id="dFile" class="input-field" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip,.csv,.txt"><div class="text-xs text-gray-500" id="dFileInfo">选择文件后自动上传并填入下方 file_ref（服务端校验哈希）</div></div>`);
+        bindControlledFileInput(modal, { fileSel: '#dFile', infoSel: '#dFileInfo', refSel: '#dRef', purpose: 'PARTNER_DOCUMENT' });
         modal.querySelector('#dSubmitBtn').addEventListener('click', async () => {
             const body = {
                 document_type: modal.querySelector('#dType').value,

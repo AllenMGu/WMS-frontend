@@ -162,6 +162,9 @@ function openProfileModal(goodsId, profileId) {
     } else if (goodsId) {
         modal.querySelector('#gGoods').value = goodsId;
     }
+    modal.querySelector('#gRegDoc').closest('.form-group').insertAdjacentHTML('beforebegin',
+        `<div class="form-group"><label class="form-label">上传注册文件受控附件（推荐）</label><input type="file" id="gRegFile" class="input-field" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip,.csv,.txt"><div class="text-xs text-gray-500" id="gRegFileInfo">选择文件后自动上传并填入下方注册文件引用</div></div>`);
+    bindControlledFileInput(modal, { fileSel: '#gRegFile', infoSel: '#gRegFileInfo', refSel: '#gRegDoc', purpose: 'DRUG_REGISTRATION' });
     modal.querySelector('#gSubmitBtn').addEventListener('click', async () => {
         const gid = Number(modal.querySelector('#gGoods').value);
         const body = {
