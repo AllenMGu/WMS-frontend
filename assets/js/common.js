@@ -165,30 +165,78 @@ async function uploadControlledFile(file, purpose, note) {
     return data; // ControlledFileOut
 }
 
-/* 受控附件输入框接线：选文件→上传→自动填 ref/hash/size */
-function bindControlledFileInput(root, { fileSel, infoSel, refSel, hashSel = null, sizeSel = null, purpose }) {
+/* 受控附件输入框接线：选文件→上传→自动填 ref/hash/size
+ * 状态机保证：
+ * - 上传期间锁定文件框与保存按钮（不会把旧引用提交成功）；
+ * - 序号守卫丢弃过期响应（快速换文件时晚返回的旧请求不覆盖新选择）；
+ * - 成功后仍可再次选择更换，旧对象会被上传人自动停用（未绑定清理）；
+ * - 上传失败恢复可操作状态；显式取消会停用已上传对象并清空引用。 */
+async function quietDisableControlledFile(ref) {
+    const key = String(ref || '').replace(/^gspf:/, '');
+    if (!/^[0-9a-f]{32}$/.test(key)) return;
+    try {
+        await api(`/gsp/files/${key}/disable`, { method: 'POST', body: { reason: '表单未提交/更换附件，自动停用未绑定对象' } });
+    } catch (e) { /* 尽力而为：停用失败不阻塞表单 */ }
+}
+function bindControlledFileInput(root, { fileSel, infoSel, refSel, hashSel = null, sizeSel = null, purpose, submitSel = null }) {
     const fileEl = root.querySelector(fileSel);
-    if (!fileEl) return;
-    fileEl.addEventListener('change', async () => {
-        const file = fileEl.files && fileEl.files[0];
-        if (!file) return;
-        const info = root.querySelector(infoSel);
-        if (info) { info.textContent = '上传中...'; info.classList && info.classList.remove('text-red-500'); }
+    const submitEl = submitSel ? root.querySelector(submitSel) : null;
+    if (!fileEl) return null;
+    const info = root.querySelector(infoSel);
+    let seq = 0;
+    let lastRef = null; // ref of the most recent server-side upload for this form
+    const setInfo = (text, error = false) => { if (info) { info.textContent = text; info.classList && info.classList.toggle('text-red-500', !!error); } };
+    const setBusy = (busy) => {
+        fileEl.disabled = busy;
+        if (submitEl) submitEl.disabled = busy;
+    };
+    async function doUpload(file) {
+        seq += 1;
+        const my = seq;
+        setBusy(true);
+        setInfo('受控附件上传中…');
         try {
             const up = await uploadControlledFile(file, purpose);
+            if (my !== seq) return; // a newer selection superseded this one
+            if (lastRef && lastRef !== up.ref) quietDisableControlledFile(lastRef);
+            lastRef = up.ref;
             const refEl = root.querySelector(refSel);
             if (refEl) refEl.value = up.ref;
             if (hashSel && root.querySelector(hashSel)) root.querySelector(hashSel).value = up.sha256;
             if (sizeSel && root.querySelector(sizeSel)) root.querySelector(sizeSel).value = up.size_bytes;
-            if (info) info.textContent = `已上传 ${up.file_name}（${up.content_type}，${up.size_bytes} 字节）${up.ref}`;
-            fileEl.disabled = true;
-            if (typeof showToast === 'function') showToast('受控附件已上传并签发 gspf 引用', 'success');
+            setInfo(`已上传 ${up.file_name}（${up.content_type}，${up.size_bytes} 字节）${up.ref}；可再次选择文件更换`);
+            setBusy(false);
+            fileEl.title = '再次选择可更换受控附件';
+            if (typeof showToast === 'function') showToast('受控附件已上传并签发引用', 'success');
         } catch (e) {
-            if (info) { info.textContent = e.message || '上传失败'; if (info.classList) info.classList.add('text-red-500'); }
-            if (typeof showToast === 'function') showToast(e.message || '上传失败', 'error');
+            if (my !== seq) return;
+            setBusy(false);
             fileEl.value = '';
+            setInfo((e && e.message) || '上传失败，请重试', true);
+            if (typeof showToast === 'function') showToast((e && e.message) || '上传失败', 'error');
         }
+    }
+    fileEl.addEventListener('change', () => {
+        const file = fileEl.files && fileEl.files[0];
+        if (file) doUpload(file);
     });
+    return {
+        uploading: () => fileEl.disabled,
+        hasUpload: () => !!lastRef,
+        lastRef: () => lastRef,
+        cancel: async () => {
+            if (lastRef) await quietDisableControlledFile(lastRef);
+            lastRef = null;
+            const refEl = root.querySelector(refSel);
+            if (refEl) refEl.value = '';
+            if (hashSel && root.querySelector(hashSel)) root.querySelector(hashSel).value = '';
+            if (sizeSel && root.querySelector(sizeSel)) root.querySelector(sizeSel).value = '';
+            fileEl.value = '';
+            fileEl.disabled = false;
+            if (submitEl) submitEl.disabled = false;
+            setInfo('已取消；重新选择文件可再次上传');
+        },
+    };
 }
 
 async function apiAll(path, pageSize = 100) {
