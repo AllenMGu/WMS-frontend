@@ -593,12 +593,19 @@ function openModal({ title = '', body = '', footer = '', size = 'md' }) {
     return modal;
 }
 function requestModalClose(modal) {
-    // User-initiated close (footer 取消 / 标题栏 × / 遮罩). Runs the optional
-    // awaitable cleanup guard first; only removes the modal when it succeeds.
-    if (!modal || !modal.__guardedClose) { closeModal(modal); return; }
+    // User-initiated close (footer 取消 / 标题栏 × / 遮罩). Single-flight: the
+    // optional awaitable cleanup guard runs at most once per attempt; repeated
+    // triggers while a cleanup is pending are ignored, so a second trigger can
+    // never bypass an in-flight guard. On failure the pending state is cleared
+    // so the user can retry; on success the modal is removed exactly once.
+    if (!modal) return;
+    if (modal.__closing) return;                 // cleanup already in progress
+    if (!modal.__guardedClose) { closeModal(modal); return; }
+    modal.__closing = true;
     Promise.resolve(modal.__guardedClose()).then(
-        () => closeModal(modal),
+        () => { modal.__closing = false; closeModal(modal); },
         (err) => {
+            modal.__closing = false;
             const msg = (err && err.message) || '存在未处置的受控附件，关闭已阻止：请重试或联系质量人员';
             if (typeof showToast === 'function') showToast(msg, 'error');
         }
