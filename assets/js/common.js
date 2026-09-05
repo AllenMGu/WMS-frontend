@@ -697,6 +697,7 @@ const PAGE_ROLE_ACCESS = {
     'operations.html': ['SYSTEM_ADMIN', 'AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
     'qms.html': ['GSP_ROLE_ONLY', 'AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
     'my-training.html': ['ANY_GSP_ROLE'],
+    'reports.html': ['ANY_GSP_ROLE'],
     'legacy-archive.html': ['SYSTEM_ADMIN', 'AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
 };
 async function loadCurrentGspRoles() {
