@@ -105,6 +105,7 @@ class ApiError extends Error {
 function extractDetailMessage(detail) {
     if (!detail) return '请求失败';
     if (typeof detail === 'string') return detail;
+    if (detail && typeof detail === 'object' && detail.detail) return String(detail.detail);
     if (detail.message) {
         if (detail.findings && detail.findings.length) {
             return detail.message + '：' + detail.findings.map(f => `${f.code || ''}${f.message || ''}`).join('；');
@@ -219,7 +220,23 @@ function bindControlledFileInput(root, { fileSel, infoSel, refSel, hashSel = nul
             return;
         }
         inFlight = null;
-        if (lastRef && lastRef !== up.ref) quietDisableControlledFile(lastRef);
+        if (lastRef && lastRef !== up.ref) {
+            // Replacing an existing upload: confirm the old object is retired
+            // before the form switches to the new reference.
+            try {
+                await disableControlledFile(lastRef);
+            } catch (e) {
+                // Do not lose the old reference; retire the just-created object
+                // best-effort and surface the failure.
+                await quietDisableControlledFile(up.ref);
+                setBusy(false);
+                fileEl.value = '';
+                const msg = `更换失败：${(e && e.message) || '未能停用旧附件，请重试或联系质量人员'}`;
+                setInfo(msg, true);
+                if (typeof showToast === 'function') showToast(msg, 'error');
+                return;
+            }
+        }
         lastRef = up.ref;
         const refEl = root.querySelector(refSel);
         if (refEl) refEl.value = up.ref;
@@ -247,7 +264,25 @@ function bindControlledFileInput(root, { fileSel, infoSel, refSel, hashSel = nul
                 setInfo('正在停用未绑定附件…');
                 try {
                     const created = await waitFor;   // let the old response settle
-                    if (created && created.ref) await quietDisableControlledFile(created.ref);
+                    if (created && created.ref) {
+                        try {
+                            await disableControlledFile(created.ref);
+                        } catch (e) {
+                            // Disable failed: keep the created ref retryable and
+                            // surface the error -- do not claim cancel success.
+                            lastRef = created.ref;
+                            const refEl = root.querySelector(refSel);
+                            if (refEl) refEl.value = created.ref;
+                            if (hashSel && root.querySelector(hashSel)) root.querySelector(hashSel).value = created.sha256 || '';
+                            if (sizeSel && root.querySelector(sizeSel)) root.querySelector(sizeSel).value = created.size_bytes || '';
+                            fileEl.value = '';
+                            setBusy(false);
+                            const msg = `取消失败：${(e && e.message) || '未能停用新上传的附件，请重试或联系质量人员'}`;
+                            setInfo(msg, true);
+                            if (typeof showToast === 'function') showToast(msg, 'error');
+                            return;
+                        }
+                    }
                 } catch (e) { /* upload itself failed; nothing was created */ }
             }
             if (!lastRef) {
