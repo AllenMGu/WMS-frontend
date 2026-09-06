@@ -4,7 +4,7 @@
  * "全部功能" -> 在内容区渲染全目录按钮网格，点击按钮原地加载对应模块。
  * ========================================================================== */
 'use strict';
-const APP_VERSION = '20260904-real-pagination';
+const APP_VERSION = '20260906-reports';
 const content = () => document.getElementById('pageContent');
 const loaded = new Set();
 
@@ -32,6 +32,7 @@ window.HUB_DESCS = {
     'audit.html': '数据完整性：哈希链审计追踪与校验',
     'operations.html': '系统运维：备份、恢复演练、秘密轮换',
     'legacy-archive.html': '历史归档：受控迁移、独立核对、只读检索与导出',
+    'reports.html': '业务报表：正式台账/开发预览、受控打印与哈希校验',
 };
 
 function moduleKey(page) {
