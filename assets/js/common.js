@@ -18,24 +18,27 @@ function esc(value) {
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+// HTML 转义后的纯文本格式器：这三个函数的结果通常被直接拼进 innerHTML。
+// 对不可解析输入原样回退前先转义，防止攻击者控制的字符串（如由 API 返回的
+// 异常字段值）在忘记包 esc() 的调用点形成 XSS —— 纵深防御。
 function fmtDT(value) {
     if (!value) return '-';
     const d = new Date(value);
-    if (isNaN(d)) return String(value);
+    if (isNaN(d)) return esc(String(value));
     const p = (n) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 function fmtD(value) {
     if (!value) return '-';
     const d = new Date(value);
-    if (isNaN(d)) return String(value);
+    if (isNaN(d)) return esc(String(value));
     const p = (n) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 function fmtNum(value) {
     if (value === null || value === undefined) return '-';
     const n = Number(value);
-    if (isNaN(n)) return String(value);
+    if (isNaN(n)) return esc(String(value));
     return Number.isInteger(n) ? String(n) : n.toFixed(3).replace(/\.?0+$/, '');
 }
 function debounce(fn, wait) {
