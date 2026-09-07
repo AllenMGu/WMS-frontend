@@ -276,7 +276,16 @@ function selftest() {
   return failed;
 }
 
-if (SELFTEST) process.exit(selftest());
+// Self-test first: a failing fixture must always fail the build.  When
+// --strict is also given, a *passing* self-test must NOT short-circuit —
+// otherwise the real source scan below (and its strict gate) never runs.
+// So: selftest failure exits immediately; selftest success falls through to
+// the scan unless --strict was not requested (bare --selftest stays selftest-only).
+if (SELFTEST) {
+  const failed = selftest();
+  if (failed > 0) process.exit(1);
+  if (!STRICT) process.exit(0);
+}
 
 const files = EXPLICIT.length ? EXPLICIT : walk(join(ROOT, 'assets/js'));
 let total = 0;
