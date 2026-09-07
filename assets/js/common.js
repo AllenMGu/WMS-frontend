@@ -698,7 +698,7 @@ const PAGE_ROLE_ACCESS = {
     'environment.html': ['ENVIRONMENT_MONITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
     'audit.html': ['AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
     'operations.html': ['SYSTEM_ADMIN', 'AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
-    'qms.html': ['GSP_ROLE_ONLY', 'AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
+    'qms.html': ['ANY_GSP_ROLE'],
     'my-training.html': ['ANY_GSP_ROLE'],
     'reports.html': ['ANY_GSP_ROLE'],
     'legacy-archive.html': ['SYSTEM_ADMIN', 'AUDITOR', 'QUALITY_MANAGER', 'QUALITY_REVIEWER'],
@@ -709,9 +709,8 @@ async function loadCurrentGspRoles() {
 }
 function hasAnyGspRole(...roles) {
     if (roles.includes('ANY_GSP_ROLE')) return currentGspRoles.size > 0;
-    const gspOnly = roles.includes('GSP_ROLE_ONLY');
-    const legacyRole = String(currentUser?.role?.value || currentUser?.role || '').toLowerCase();
-    if (!gspOnly && legacyRole === 'admin') return true;
+    // 授权判定完全以服务端 /gsp/roles/me 返回的有效岗位为准，
+    // 绝不信任 localStorage 中可被篡改的 currentUser.role。
     return roles.some(role => currentGspRoles.has(role));
 }
 function canAccessPage(page) {
