@@ -130,7 +130,7 @@
         const preview = String(res.copy_no || '').startsWith('PREVIEW-');
         const modal = openModal({ title: `${preview ? '开发预览件' : '受控打印件'} ${res.copy_no}`, size: 'lg',
             body: `<div class="text-xs text-gray-500 mb-2">内容哈希 ${res.content_hash}</div>
-                   <iframe id="rpIframe" style="width:100%;height:60vh;border:1px solid #ccc"></iframe>`,
+                   <iframe id="rpIframe" sandbox="allow-modals" style="width:100%;height:60vh;border:1px solid #ccc"></iframe>`,
             footer: `<button class="btn btn-secondary" data-close>关闭</button>
                      <button class="btn btn-primary" id="rpPrint"><i class="fa fa-print"></i> 打印</button>
                      <button class="btn btn-secondary" id="rpVerify">校验哈希</button>` });
