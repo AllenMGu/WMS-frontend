@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>药品GSP仓储与质量管理系统 - 登录</title>
+    <!-- CSP（缓解）：禁 object/frame 嵌入与外部脚本源；保留 'unsafe-inline' 兼容登录页自身内联脚本。
+         完整严格化需移除内联脚本后启用 nonce/hash，属后续专项。 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <link rel="stylesheet" href="assets/css/main.css?v=20260831">
 </head>
@@ -92,8 +95,8 @@
                 storage.removeItem('access_token'); storage.removeItem('user'); storage.removeItem('token_expiry');
                 storage.setItem('access_token', data.access_token);
                 storage.setItem('user', JSON.stringify(data.user));
+                // 会话时效以服务端 expiry(JWT exp) 为准，不伪造更长有效期(P1-2 缓解)
                 if (data.expiry) storage.setItem('token_expiry', data.expiry);
-                else if (remember) { const d = new Date(); d.setDate(d.getDate() + 7); storage.setItem('token_expiry', d.toISOString()); }
                 window.location.href = 'app.html';
             } catch (error) {
                 errorText.textContent = error.message;

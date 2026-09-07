@@ -73,16 +73,14 @@ function getStoredAuth() {
     return null;
 }
 function storeAuth(data, remember) {
+    // 会话时效以服务端 /token 返回的 expiry(JWT exp) 为权威，不再前端伪造 7 天更长期限，
+    // 以缩小 token 泄露到 localStorage 后的可用窗口(P1-2 缓解)。
     const storage = remember ? localStorage : sessionStorage;
     storage.removeItem('access_token'); storage.removeItem('user'); storage.removeItem('token_expiry');
     if (!remember) { localStorage.removeItem('access_token'); localStorage.removeItem('user'); localStorage.removeItem('token_expiry'); }
     storage.setItem('access_token', data.access_token);
     storage.setItem('user', JSON.stringify(data.user));
     if (data.expiry) storage.setItem('token_expiry', data.expiry);
-    else if (remember) {
-        const d = new Date(); d.setDate(d.getDate() + 7);
-        storage.setItem('token_expiry', d.toISOString());
-    }
 }
 function logout() {
     localStorage.removeItem('access_token'); localStorage.removeItem('user'); localStorage.removeItem('token_expiry');
