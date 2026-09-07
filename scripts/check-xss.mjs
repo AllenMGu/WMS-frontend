@@ -10,6 +10,9 @@
  *   escaping helper (esc/escV/badge/statusBadge/fmtDT/fmtD/fmtNum/...),
  *   is not inside an optionHTML(...) call (escapes labels & values), and is
  *   not an identity/numeric field (id, *_id, counts, page, ...).
+ *   URL encoders (encodeURIComponent/encodeURI) are NOT accepted as HTML
+ *   helpers: they are not HTML-context encoders (encodeURIComponent leaves
+ *   "'" unencoded), so they cannot protect single-quoted attribute contexts.
  *
  * Precise suppression (per interpolation, never per whole sink):
  *   // xss-safe:TOKEN    on the same / adjacent line -> skips interpolations
@@ -98,7 +101,12 @@ function optionHTMLSpans(str) {
   return spans;
 }
 
-const HELPER_OPEN = /\b(?:esc|escV|badge|statusBadge|fmtDT|fmtD|fmtNum|encodeURIComponent)\s*\(/g;
+const HELPER_OPEN = /\b(?:esc|escV|badge|statusBadge|fmtDT|fmtD|fmtNum)\s*\(/g;
+// NOTE: URL encoders (encodeURIComponent/encodeURI) are deliberately NOT in
+// the safe list: they are not HTML-context encoders — encodeURIComponent does
+// not even encode "'", so a ${...} wrapped only by it can still break out of a
+// single-quoted attribute inside the sink. Only true HTML/JS-context helpers
+// suppress a candidate.
 
 function isWrappedByHelper(expr, pos) {
   // any helper whose call opens before pos and closes after pos
@@ -212,14 +220,30 @@ function scan(source) {
       continue;
     }
 
-    // direct: consume the template literal opened on/after this line
+    // direct: consume until the sink STATEMENT is complete.  A template may
+    // open on the same line or on a later one (`el.innerHTML =\n`...`;`), so
+    // stopping only while a backtick is open would miss interpolations whose
+    // template starts on the next line.  Keep appending lines until backticks
+    // are balanced AND the statement is terminated (`;`/`}`/`)`/`]`/closing
+    // backtick), ignoring a trailing `//` comment after the closing backtick.
+    const statementComplete = (txt) => {
+      const backticks = (txt.match(/(?<!\\)`/g) || []).length;
+      if (backticks % 2 === 1) return false;
+      let head = txt;
+      let cm = -1;
+      let mm;
+      const cmRe = /\/\//g;
+      while ((mm = cmRe.exec(txt))) cm = mm.index;
+      if (cm > txt.lastIndexOf('`')) head = txt.slice(0, cm);
+      head = head.trimEnd();
+      if (!head) return false;
+      return /[;)`}\]]\s*$/.test(head);
+    };
     let acc = line;
-    let backticks = (acc.match(/(?<!\\)`/g) || []).length;
     let end = i;
-    while (backticks % 2 === 1 && end + 1 < lines.length) {
+    while (!statementComplete(acc) && end + 1 < lines.length) {
       end += 1;
       acc += '\n' + lines[end];
-      backticks += (lines[end].match(/(?<!\\)`/g) || []).length;
     }
     // analyse each source line's slice of the block so reported line numbers
     // point at the interpolation, not the sink opener
@@ -262,6 +286,13 @@ function selftest() {
     ['// xss-safe\nbox.innerHTML = `<td>${u.remark}</td>`;\nbox.innerHTML = `<td>${u.name}</td>`;', true],
     ['el.innerHTML = `<td>${fmtDT(u.created_at)}</td>`;', false],
     ['el.innerHTML = `<td>${u.status}</td>`;', false],
+    // cross-line template literal: sink `=` on line 1, template opens on line 2
+    ['el.innerHTML =\n`<td>${u.name}</td>`;', true],
+    ['el.innerHTML =\n`<td>${esc(u.name)}</td>`;', false],
+    // encodeURIComponent is NOT an HTML-context escaper (leaves ' unencoded):
+    // neither text nor (single-)quoted attribute contexts may trust it.
+    ['el.innerHTML = `<td>${encodeURIComponent(u.name)}</td>`;', true],
+    ["el.innerHTML = `<a href='/s?q=${encodeURIComponent(u.name)}'>x</a>`;", true],
   ];
   let failed = 0;
   for (const [src, expectFinding] of cases) {
