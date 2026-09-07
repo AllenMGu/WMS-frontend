@@ -32,12 +32,14 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 function findBrowser() {
   const candidates = [
     process.env.CHROME_PATH,
+    process.env.CHROME_BIN,
     process.env.EDGE_PATH,
     "C:/Program Files/Google/Chrome/Application/chrome.exe",
     "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
     "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
     "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
     "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
     "/usr/bin/chromium",
     "/usr/bin/chromium-browser",
   ].filter(Boolean);
@@ -129,9 +131,19 @@ runPrintScenario();
 </script></body></html>`;
 }
 
+const requireBrowser = process.argv.includes("--require-browser")
+  || process.env.REQUIRE_BROWSER === "1";
 const browser = findBrowser();
 if (!browser) {
-  console.log("SKIP browser-reports-isolation: no Chrome/Edge binary found (set CHROME_PATH/EDGE_PATH)");
+  // By default we SKIP so a Chrome-less local run / non-browser CI job stays green;
+  // pass --require-browser (or REQUIRE_BROWSER=1) to FAIL when no browser exists so
+  // the dedicated browser job proves the assertions actually ran.
+  const msg = "browser-reports-isolation: no Chrome/Edge binary found (set CHROME_PATH/EDGE_PATH)";
+  if (requireBrowser) {
+    console.error("FAIL " + msg);
+    process.exit(1);
+  }
+  console.log("SKIP " + msg);
   process.exit(0);
 }
 
