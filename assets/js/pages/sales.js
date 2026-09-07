@@ -124,6 +124,7 @@
         const addRow = () => {
             const row = document.createElement('div');
             row.className = 'flex gap-2 mb-2';
+            // xss-safe: optionHTML 内部对每个 option 的 label 与 value 均做 esc()，回调里的 ${g.name}/${g.spec} 安全。
             row.innerHTML = `
             <select class="input-field so-goods" style="flex:2">${optionHTML(goodsList, 'id', g => `${g.name}（${g.spec || ''}）`, '选择货物')}</select>
             <input class="input-field so-qty" type="number" step="0.001" min="0.001" placeholder="数量" style="flex:1">

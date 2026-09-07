@@ -24,6 +24,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Validate SPA contracts and GSP controls
         run: node scripts/validate.mjs
+      - name: Scan for unescaped HTML sinks
+        run: node scripts/check-xss.mjs --strict --selftest
       - name: Check maintained JavaScript syntax
         run: |
           node --check config.js

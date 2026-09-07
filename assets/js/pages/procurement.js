@@ -108,6 +108,7 @@
             if (!authorizedGoods.length) { showToast('该供应商没有有效的获准供货品种', 'warning'); return; }
             const row = document.createElement('div');
             row.className = 'flex gap-2 mb-2';
+            // xss-safe: optionHTML 内部对每个 option 的 label 与 value 均做 esc()，回调里的 ${g.name}/${g.spec} 安全。
             row.innerHTML = `
             <select class="input-field po-goods" style="flex:2">${optionHTML(authorizedGoods, 'id', g => `${g.name}（${g.spec || ''}）`, '选择获准供货品种')}</select>
             <input class="input-field po-qty" type="number" step="0.001" min="0.001" placeholder="数量" style="flex:1">

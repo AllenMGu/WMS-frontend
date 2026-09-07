@@ -81,6 +81,7 @@
             return;
         }
         const today = todayISO();
+        // xss-safe: 行内所有 ${goods.name}/${goods.spec} 等字段均包在 esc() 内，嵌套模板由外层 esc 转义。
         box.innerHTML = `<div class="alert alert-warning mb-2"><b>供货品种授权预警：</b>以下记录待审批、${authorizationWarningDays} 天内到期或已经过期。</div>
         <div class="table-wrap"><table class="data-table"><thead><tr><th>供应商</th><th>品种</th><th>有效期至</th><th>状态</th><th>处理</th></tr></thead><tbody>${authorizationAlerts.map(a => {
             const supplier = partners.find(p => p.id === a.supplier_id);
