@@ -30,6 +30,8 @@ window.WMS_CONFIG = {
 
 后端需要把前端完整 Origin（协议、域名和端口）加入 `ALLOWED_ORIGINS`。生产环境建议通过反向代理统一发布前端和 `/api`。
 
+> CSP 说明：`index.html` / `app.html` 的 Content-Security-Policy 里 `connect-src 'self' https: http: ws: wss:` 已放行独立域名的 API 调用（对应上面 `apiBaseUrl` 的跨域配置）。若未来收紧 `connect-src`，务必把实际后端 Origin 加入白名单，否则独立域名部署会被浏览器拦截。
+
 ## 权限与审计
 
 - 页面菜单根据 `GET /api/gsp/roles/me` 返回的有效岗位过滤；

@@ -32,5 +32,18 @@ assert.ok(reports.includes("打印记录台账（正式受控 / 开发预览）"
 assert.ok(reports.includes("校验通过：预览记录内容与后端快照一致"), "preview verify wording");
 // 7) cache-busted assets so the new nav entry is not served stale
 assert.ok(apphtml.includes("20260906-reports"), "asset version bumped");
+// 8) preview + print share the SAME sandboxed document (审核 P1: 报表打印路径隔离).
+//    预览 iframe 必须带 sandbox="allow-modals"（禁脚本/禁同源，仅放行模态打印）。
+assert.ok(/<iframe id="rpIframe" sandbox="allow-modals"/.test(reports),
+    "preview iframe is sandboxed (allow-modals, no scripts/same-origin)");
+//    打印不得再走 window.open('', '_blank') + document.write 的未隔离窗口，
+//    否则快照内脚本会在与父页面同源的新窗口执行。
+assert.ok(!reports.includes("window.open('', '_blank')"),
+    "print must NOT open an unsandboxed blank window");
+assert.ok(!reports.includes("w.document.write(res.html)"),
+    "print must NOT document.write the snapshot into an unsandboxed window");
+//    打印应复用同一个 sandboxed iframe 的 contentWindow.print()。
+assert.ok(reports.includes("iframe.contentWindow") && reports.includes(".print()"),
+    "print reuses the sandboxed preview iframe contentWindow.print()");
 
 console.log("behavior-reports: structural regression checks passed");

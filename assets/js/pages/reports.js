@@ -134,10 +134,17 @@
             footer: `<button class="btn btn-secondary" data-close>关闭</button>
                      <button class="btn btn-primary" id="rpPrint"><i class="fa fa-print"></i> 打印</button>
                      <button class="btn btn-secondary" id="rpVerify">校验哈希</button>` });
-        modal.querySelector('#rpIframe').srcdoc = res.html;
+        const iframe = modal.querySelector('#rpIframe');
+        iframe.srcdoc = res.html;
+        // 打印复用与预览一致的 sandbox 隔离文档：预览 iframe 已带 sandbox="allow-modals"
+        // （禁脚本/禁同源，仅放行模态弹窗），直接对它 contentWindow.print() 即可，不再
+        // 走 window.open+document.write 的未隔离窗口——后者会让快照中的恶意脚本在
+        // 与父页面同源的新窗口执行并可访问 opener/同源数据。
         modal.querySelector('#rpPrint').addEventListener('click', () => {
-            const w = window.open('', '_blank');
-            if (w) { w.document.write(res.html); w.document.close(); w.focus(); setTimeout(() => w.print(), 300); }
+            const w = iframe.contentWindow;
+            if (!w) return;
+            try { w.focus(); setTimeout(() => w.print(), 50); }
+            catch (e) { showToast('打印失败：' + e.message, 'error'); }
         });
         modal.querySelector('#rpVerify').addEventListener('click', async () => {
             try {
