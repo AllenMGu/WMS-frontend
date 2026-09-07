@@ -135,16 +135,15 @@
                      <button class="btn btn-primary" id="rpPrint"><i class="fa fa-print"></i> 打印</button>
                      <button class="btn btn-secondary" id="rpVerify">校验哈希</button>` });
         const iframe = modal.querySelector('#rpIframe');
-        iframe.srcdoc = res.html;
-        // 打印复用与预览一致的 sandbox 隔离文档：预览 iframe 已带 sandbox="allow-modals"
-        // （禁脚本/禁同源，仅放行模态弹窗），直接对它 contentWindow.print() 即可，不再
-        // 走 window.open+document.write 的未隔离窗口——后者会让快照中的恶意脚本在
-        // 与父页面同源的新窗口执行并可访问 opener/同源数据。
+        // 先净化后端快照：任何 <script>/on* 事件/javascript: 载体都被移除（sanitizeRenderHtml
+        // 含失败闭合——残留可执行 token 会整段降级为纯文本）。净化后同源文档可安全打印。
+        const safeHtml = sanitizeRenderHtml(res.html);
+        iframe.srcdoc = safeHtml;
+        // 打印：预览 iframe 因 sandbox 为不透明源，父页面无法跨源调用 contentWindow.print()
+        //（同源策略，实测 SecurityError），故打印改走一个同源临时 iframe 渲染同一份净化后
+        // 的 safeHtml——内容已无脚本，父页面可正常触发打印，二者共用同一净化策略。
         modal.querySelector('#rpPrint').addEventListener('click', () => {
-            const w = iframe.contentWindow;
-            if (!w) return;
-            try { w.focus(); setTimeout(() => w.print(), 50); }
-            catch (e) { showToast('打印失败：' + e.message, 'error'); }
+            printSanitizedHtml(safeHtml);
         });
         modal.querySelector('#rpVerify').addEventListener('click', async () => {
             try {
@@ -153,6 +152,39 @@
             } catch (e) { showToast(e.message, 'error'); }
         });
         setTimeout(() => loadPrints(), 300);
+    }
+
+    // 在临时同源 iframe 中渲染"已净化无脚本"的 HTML 并调用其打印；打印完即移除，不留残余。
+    // 直接在同一条调用栈里 try/catch，绝不放入 setTimeout 异步回调（后者异常无法被捕获）。
+    function printSanitizedHtml(safeHtml) {
+        const holder = document.getElementById('pageContent') || document.body;
+        const frame = document.createElement('iframe');
+        frame.setAttribute('aria-hidden', 'true');
+        frame.style.cssText = 'position:absolute;left:-9999px;top:0;width:1024px;height:768px;border:0;';
+        holder.appendChild(frame);
+        const done = () => { try { holder.removeChild(frame); } catch (e) { /* noop */ } };
+        const doPrint = () => {
+            try {
+                const w = frame.contentWindow;
+                if (!w) throw new Error('打印窗口不可用');
+                w.focus();
+                w.print();          // 同源 iframe，contentWindow.print() 可正常调用
+                done();
+            } catch (e) {
+                done();
+                showToast('打印失败：' + (e && e.message ? e.message : e), 'error');
+            }
+        };
+        try {
+            frame.srcdoc = safeHtml;
+            // 等待 srcdoc 文档加载完成再打印，保证内容就绪；load 事件内的异常在此 doPrint 中捕获。
+            frame.addEventListener('load', doPrint, { once: true });
+            // 兜底：若 load 已错过（罕见竞态），强制触发一次。
+            if (frame.contentDocument && frame.contentDocument.readyState === 'complete') doPrint();
+        } catch (e) {
+            done();
+            showToast('打印失败：' + (e && e.message ? e.message : e), 'error');
+        }
     }
 
     async function loadPrints(reset = true) {
