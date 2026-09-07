@@ -11,6 +11,37 @@ let currentGspRoles = new Set();
 let resolveAppShellReady;
 window.appShellReady = new Promise((resolve) => { resolveAppShellReady = resolve; });
 
+/*
+ * 净化由后端返回、需注入 iframe 渲染/打印的 HTML（如报表受控打印快照 res.html）。
+ *
+ * 目标：在"父页面要能打印/查看该文档"的场景下，即使快照内被注入脚本，也绝不执行。
+ * 说明：仅靠 sandbox 会让 iframe 变为不透明源，父页面将无法跨源调用其
+ *       contentWindow.print()（同源策略，实测 SecurityError）。因此打印路径
+ *       采用"先净化、再以同源文档渲染"：净化函数把可执行载体(<script>/<iframe>/<object>/
+ *       <embed>/on* 事件属性/javascript: 等)全部移除，并对净化结果做失败闭合校验——
+ *       若仍残留任何可执行 token，则整段降级为纯文本(esc)，宁可不可打印也不执行脚本。
+ */
+function sanitizeRenderHtml(html) {
+    if (html === null || html === undefined) return '';
+    let s = String(html);
+    // 1) 移除 <script ...>...</script>（含开/闭标签各种属性/空格变体）。
+    s = s.replace(/<\s*\/?\s*script[^>]*>/gi, '');
+    // 2) 移除会注入/嵌入文档的标签：iframe/frame/frameset/object/embed/applet/base/meta。
+    //    (保留 style/link 以免破坏受控打印排版)
+    s = s.replace(/<\s*(iframe|frame|frameset|object|embed|applet|base|meta)\b[^>]*>/gi, '');
+    s = s.replace(/<\s*\/\s*(iframe|frame|frameset|object|embed|applet|base|meta)\s*>/gi, '');
+    // 3) 移除所有 on* 事件属性（onclick/onerror/onload...，引号/无引号/大小写变体）。
+    s = s.replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, ' ');
+    // 4) 中和可执行 URL scheme：javascript:/vbscript:/data:text/html。
+    s = s.replace(/(javascript|vbscript)\s*:/gi, 'x-javascript:');
+    s = s.replace(/data\s*:\s*text\/html/gi, 'data:text/plain');
+    // 5) 失败闭合校验：若净化后仍残留脚本/嵌入标签/事件属性/javascript 载体，说明
+    //    黑名单被绕过，整段降级为纯文本(esc)，绝不渲染可执行 HTML。
+    if (/(<\s*script|<\s*(iframe|object|embed|applet)\b|on[a-z]+\s*=|\sjavascript\s*:)/i.test(s)) {
+        return esc(s);
+    }
+    return s;
+}
 /* ----------------------------- 工具函数 ----------------------------- */
 function esc(value) {
     if (value === null || value === undefined) return '';
@@ -73,16 +104,14 @@ function getStoredAuth() {
     return null;
 }
 function storeAuth(data, remember) {
+    // 会话时效以服务端 /token 返回的 expiry(JWT exp) 为权威，不再前端伪造 7 天更长期限，
+    // 以缩小 token 泄露到 localStorage 后的可用窗口(P1-2 缓解)。
     const storage = remember ? localStorage : sessionStorage;
     storage.removeItem('access_token'); storage.removeItem('user'); storage.removeItem('token_expiry');
     if (!remember) { localStorage.removeItem('access_token'); localStorage.removeItem('user'); localStorage.removeItem('token_expiry'); }
     storage.setItem('access_token', data.access_token);
     storage.setItem('user', JSON.stringify(data.user));
     if (data.expiry) storage.setItem('token_expiry', data.expiry);
-    else if (remember) {
-        const d = new Date(); d.setDate(d.getDate() + 7);
-        storage.setItem('token_expiry', d.toISOString());
-    }
 }
 function logout() {
     localStorage.removeItem('access_token'); localStorage.removeItem('user'); localStorage.removeItem('token_expiry');
@@ -709,9 +738,8 @@ async function loadCurrentGspRoles() {
 }
 function hasAnyGspRole(...roles) {
     if (roles.includes('ANY_GSP_ROLE')) return currentGspRoles.size > 0;
-    const gspOnly = roles.includes('GSP_ROLE_ONLY');
-    const legacyRole = String(currentUser?.role?.value || currentUser?.role || '').toLowerCase();
-    if (!gspOnly && legacyRole === 'admin') return true;
+    // 授权判定完全以服务端 /gsp/roles/me 返回的有效岗位为准，
+    // 绝不信任 localStorage 中可被篡改的 currentUser.role。
     return roles.some(role => currentGspRoles.has(role));
 }
 function canAccessPage(page) {

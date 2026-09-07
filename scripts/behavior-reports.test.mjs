@@ -32,5 +32,35 @@ assert.ok(reports.includes("打印记录台账（正式受控 / 开发预览）"
 assert.ok(reports.includes("校验通过：预览记录内容与后端快照一致"), "preview verify wording");
 // 7) cache-busted assets so the new nav entry is not served stale
 assert.ok(apphtml.includes("20260906-reports"), "asset version bumped");
+// 8) 报表打印/预览隔离（审核 P1 两轮复审）。
+//    预览 iframe 带 sandbox="allow-modals"（禁脚本/禁同源，仅放行模态）——纯查看。
+assert.ok(/<iframe id="rpIframe" sandbox="allow-modals"/.test(reports),
+    "preview iframe is sandboxed (allow-modals, no scripts/same-origin)");
+//    打印不得再走 window.open('', '_blank') + document.write 的未隔离窗口，
+//    否则快照内脚本会在与父页面同源的新窗口执行。
+assert.ok(!reports.includes("window.open('', '_blank')"),
+    "print must NOT open an unsandboxed blank window");
+assert.ok(!reports.includes("w.document.write(res.html)"),
+    "print must NOT document.write the snapshot into an unsandboxed window");
+//    关键：sandbox(禁同源) 的 iframe 是不透明源，父页面跨源调 contentWindow.print() 会被
+//    同源策略拒(SecurityError)，打印必须改用"净化+同源临时 iframe"。断言语义：
+//    - 打印内容先经 sanitizeRenderHtml 净化（脚本被移除）；
+//    - 打印由同源 iframe 触发（contentWindow.print() 可正常调用），不再依赖跨源调用。
+assert.ok(reports.includes("const safeHtml = sanitizeRenderHtml(res.html)"),
+    "print content is sanitized via sanitizeRenderHtml before render");
+assert.ok(reports.includes("printSanitizedHtml(safeHtml)"),
+    "print dispatches to printSanitizedHtml on the sanitized content");
+assert.ok(reports.includes("function printSanitizedHtml(safeHtml)"),
+    "printSanitizedHtml helper defined");
+assert.ok(!/\.contentWindow\s*\.print\s*\(\)/.test(reports),
+    "must NOT call contentWindow.print() across the opaque-origin sandboxed preview (SecurityError)");
+// 9) sanitizeRenderHtml 是 common.js 提供的净化原语：内含失败闭合降级与脚本/事件剥离。
+assert.ok(common.includes("function sanitizeRenderHtml(html)"),
+    "sanitizeRenderHtml defined in common.js");
+assert.ok(common.includes("return esc(s)"),
+    "sanitizer fails closed to plain-text when an executable token survives");
+assert.ok(/on\[a-z\]+\s*=\s*\*/.test(common) || common.includes("on[a-z]+\\s*=\\s*"),
+    "sanitizer strips on* event-handler attributes");
+assert.ok(/javascript/.test(common), "sanitizer neutralizes javascript: scheme");
 
 console.log("behavior-reports: structural regression checks passed");

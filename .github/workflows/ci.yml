@@ -32,3 +32,20 @@ jobs:
           node --check assets/js/common.js
           node --check assets/js/app.js
           find assets/js/pages -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+
+  # 报表打印隔离需真实浏览器：只有真在 Chrome 里跑 printSanitizedHtml，才能断言
+  # "打印瞬间文档非空白/非 about:blank、内容含报表、打印后清理"。install Chrome 后用
+  # --require-browser 强制：找不到浏览器即失败（绝不静默跳过）。
+  browser-report-isolation:
+    name: Report print isolation (browser)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+      - name: Run real-browser report print isolation assertions
+        run: node scripts/browser-reports-isolation.test.mjs --require-browser

@@ -208,3 +208,5 @@ console.log(`已验证 ${modules.length} 个 SPA 模块、运行时配置、岗�
 await import("./behavior-controlled-upload.test.mjs");
 // Reports centre regression checks.
 await import("./behavior-reports.test.mjs");
+// sanitizeRenderHtml containment checks (runs the real common.js function).
+await import("./behavior-sanitizer.test.mjs");

@@ -52,8 +52,11 @@
             <td>${esc(s.authentication_method)}</td>
             <td>${fmtDT(s.signed_at)}</td>
             <td class="text-xs" title="${esc(s.signature_hash)}">${esc((s.signature_hash || '').slice(0, 10))}…</td>
-            <td class="actions"><button class="btn btn-link btn-sm" onclick="PG('signatures').verifyOne('${esc(s.signature_ref)}')"><i class="fa fa-check-circle"></i> 核验</button></td>
+            <td class="actions"><button class="btn btn-link btn-sm" data-verify-ref="${esc(s.signature_ref)}"><i class="fa fa-check-circle"></i> 核验</button></td>
         </tr>`).join('') || '<tr><td colspan="9"><div class="empty-state">暂无电子签名记录</div></td></tr>';
+        tbody.querySelectorAll('[data-verify-ref]').forEach(btn => {
+            btn.addEventListener('click', () => verifyOne(btn.getAttribute('data-verify-ref')));
+        });
     }
 
     async function verifyOne(ref) {

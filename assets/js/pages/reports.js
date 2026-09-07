@@ -130,14 +130,20 @@
         const preview = String(res.copy_no || '').startsWith('PREVIEW-');
         const modal = openModal({ title: `${preview ? '开发预览件' : '受控打印件'} ${res.copy_no}`, size: 'lg',
             body: `<div class="text-xs text-gray-500 mb-2">内容哈希 ${res.content_hash}</div>
-                   <iframe id="rpIframe" style="width:100%;height:60vh;border:1px solid #ccc"></iframe>`,
+                   <iframe id="rpIframe" sandbox="allow-modals" style="width:100%;height:60vh;border:1px solid #ccc"></iframe>`,
             footer: `<button class="btn btn-secondary" data-close>关闭</button>
                      <button class="btn btn-primary" id="rpPrint"><i class="fa fa-print"></i> 打印</button>
                      <button class="btn btn-secondary" id="rpVerify">校验哈希</button>` });
-        modal.querySelector('#rpIframe').srcdoc = res.html;
+        const iframe = modal.querySelector('#rpIframe');
+        // 先净化后端快照：任何 <script>/on* 事件/javascript: 载体都被移除（sanitizeRenderHtml
+        // 含失败闭合——残留可执行 token 会整段降级为纯文本）。净化后同源文档可安全打印。
+        const safeHtml = sanitizeRenderHtml(res.html);
+        iframe.srcdoc = safeHtml;
+        // 打印：预览 iframe 因 sandbox 为不透明源，父页面无法跨源调用 contentWindow.print()
+        //（同源策略，实测 SecurityError），故打印改走一个同源临时 iframe 渲染同一份净化后
+        // 的 safeHtml——内容已无脚本，父页面可正常触发打印，二者共用同一净化策略。
         modal.querySelector('#rpPrint').addEventListener('click', () => {
-            const w = window.open('', '_blank');
-            if (w) { w.document.write(res.html); w.document.close(); w.focus(); setTimeout(() => w.print(), 300); }
+            printSanitizedHtml(safeHtml);
         });
         modal.querySelector('#rpVerify').addEventListener('click', async () => {
             try {
@@ -146,6 +152,37 @@
             } catch (e) { showToast(e.message, 'error'); }
         });
         setTimeout(() => loadPrints(), 300);
+    }
+
+    // 在临时同源 iframe 中渲染"已净化无脚本"的 HTML 并调用其打印；打印完即移除，不留残余。
+    // 关键：必须先注册 load 监听，再设 srcdoc；若反过来 srcdoc 写入会同步生成一份
+    // readyState=complete 的 about:blank 文档，任何"立即检查 readyState 兜底"都会赶在
+    // 真实报表文档加载之前触发打印——得到一张空白页。
+    function printSanitizedHtml(safeHtml) {
+        const holder = document.getElementById('pageContent') || document.body;
+        const frame = document.createElement('iframe');
+        frame.setAttribute('aria-hidden', 'true');
+        frame.style.cssText = 'position:absolute;left:-9999px;top:0;width:1024px;height:768px;border:0;';
+        holder.appendChild(frame);
+        let fired = false;
+        const finish = () => { try { holder.removeChild(frame); } catch (e) { /* noop */ } };
+        const doPrint = () => {
+            if (fired) return;            // 防止 load 与 readyState 重复触发
+            fired = true;
+            try {
+                const w = frame.contentWindow;
+                if (!w) throw new Error('打印窗口不可用');
+                w.focus();
+                w.print();                // 同源 srcdoc 已加载完成，contentWindow.print() 可正常调用
+                finish();
+            } catch (e) {
+                finish();
+                showToast('打印失败：' + (e && e.message ? e.message : e), 'error');
+            }
+        };
+        // 先注册 load，再设 srcdoc，保证不漏报也不抢在 about:blank 之前打印。
+        frame.addEventListener('load', doPrint, { once: true });
+        frame.srcdoc = safeHtml;
     }
 
     async function loadPrints(reset = true) {
