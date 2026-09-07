@@ -155,36 +155,34 @@
     }
 
     // 在临时同源 iframe 中渲染"已净化无脚本"的 HTML 并调用其打印；打印完即移除，不留残余。
-    // 直接在同一条调用栈里 try/catch，绝不放入 setTimeout 异步回调（后者异常无法被捕获）。
+    // 关键：必须先注册 load 监听，再设 srcdoc；若反过来 srcdoc 写入会同步生成一份
+    // readyState=complete 的 about:blank 文档，任何"立即检查 readyState 兜底"都会赶在
+    // 真实报表文档加载之前触发打印——得到一张空白页。
     function printSanitizedHtml(safeHtml) {
         const holder = document.getElementById('pageContent') || document.body;
         const frame = document.createElement('iframe');
         frame.setAttribute('aria-hidden', 'true');
         frame.style.cssText = 'position:absolute;left:-9999px;top:0;width:1024px;height:768px;border:0;';
         holder.appendChild(frame);
-        const done = () => { try { holder.removeChild(frame); } catch (e) { /* noop */ } };
+        let fired = false;
+        const finish = () => { try { holder.removeChild(frame); } catch (e) { /* noop */ } };
         const doPrint = () => {
+            if (fired) return;            // 防止 load 与 readyState 重复触发
+            fired = true;
             try {
                 const w = frame.contentWindow;
                 if (!w) throw new Error('打印窗口不可用');
                 w.focus();
-                w.print();          // 同源 iframe，contentWindow.print() 可正常调用
-                done();
+                w.print();                // 同源 srcdoc 已加载完成，contentWindow.print() 可正常调用
+                finish();
             } catch (e) {
-                done();
+                finish();
                 showToast('打印失败：' + (e && e.message ? e.message : e), 'error');
             }
         };
-        try {
-            frame.srcdoc = safeHtml;
-            // 等待 srcdoc 文档加载完成再打印，保证内容就绪；load 事件内的异常在此 doPrint 中捕获。
-            frame.addEventListener('load', doPrint, { once: true });
-            // 兜底：若 load 已错过（罕见竞态），强制触发一次。
-            if (frame.contentDocument && frame.contentDocument.readyState === 'complete') doPrint();
-        } catch (e) {
-            done();
-            showToast('打印失败：' + (e && e.message ? e.message : e), 'error');
-        }
+        // 先注册 load，再设 srcdoc，保证不漏报也不抢在 about:blank 之前打印。
+        frame.addEventListener('load', doPrint, { once: true });
+        frame.srcdoc = safeHtml;
     }
 
     async function loadPrints(reset = true) {

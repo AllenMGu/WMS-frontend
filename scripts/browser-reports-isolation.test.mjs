@@ -1,30 +1,26 @@
 #!/usr/bin/env node
 /**
  * browser-reports-isolation.test.mjs — real-headless-browser regression for the
- * report print path (审核两轮复审：打印不可用，需真浏览器测试).
+ * report print path. Both sandboxed-print-availability AND print-timing/content
+ * readiness are checked against a real Chrome/Edge instance.
  *
- * A structural assertion ("source contains .print()") cannot reveal that the
- * sandboxed (no allow-same-origin) preview iframe is an opaque-origin document,
- * across which the parent calling contentWindow.print() throws SecurityError.
- * Only a real browser can prove print usability, so we drive Chrome/Edge headless
- * and assert:
+ *   1. SANDBOX PRINT-AVAILABILITY: a sandboxed (no allow-same-origin) preview
+ *      iframe is an opaque-origin document; the parent calling its
+ *      contentWindow.print() must throw SecurityError. This documents why the
+ *      print path must NOT use the sandboxed preview.
  *
- *   1. sandboxed preview iframe -> parent contentWindow.print() === SecurityError
- *      (documents why that path must NOT be used);
- *   2. plain same-origin srcdoc iframe (the target printSanitizedHtml uses) ->
- *      contentWindow.print() is callable (typeof === "function").
- *
- * The script-execution containment of the snapshot is covered by
- * behavior-reports.test.mjs + the real sanitizeRenderHtml (asserted structurally)
- * and by node --test of sanitizeRenderHtml under a window stub in
- * behavior-sanitizer.test.mjs (pure, runs in CI without a browser).
+ *   2. PRINT-TIMING + CONTENT-READY: the real reports.js#printSanitizedHtml is
+ *      loaded into a bare harness with a stub showToast. A same-origin srcdoc
+ *      iframe whose <script> wraps window.print to record the body innerText
+ *      at the moment of the print call receives a report payload. The test
+ *      asserts the recorded content is the report body (not "" / not "about:blank"),
+ *      and that the iframe is removed after the print (no leftover node).
  *
  * Browser discovery: env CHROME_PATH / EDGE_PATH, else common install paths.
- * If no browser is found it prints SKIP and exits 0 so the Chrome-less CI
- * "Validate static frontend" job stays green; run explicitly (or where Chrome is
- * provisioned) for the real check.
+ * If no browser is found the test prints "SKIP" and exits 0 so the Chrome-less
+ * CI "Validate static frontend" job stays green. Provide CHROME_PATH to enable.
  */
-import { writeFileSync, rmSync, mkdtempSync } from "node:fs";
+import { readFileSync, writeFileSync, rmSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -54,10 +50,24 @@ function findBrowser() {
   return null;
 }
 
+/** Extract a function by balanced-brace counting. */
+function extractFn(src, name) {
+  const start = src.indexOf(`function ${name}(`);
+  if (start === -1) throw new Error(`function ${name} not found`);
+  const brace = src.indexOf("{", start);
+  let depth = 0;
+  for (let i = brace; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") { depth--; if (depth === 0) return src.slice(start, i + 1); }
+  }
+  throw new Error(`unbalanced braces for ${name}`);
+}
+
 function harnessHtml() {
-  // No dependency on common.js: the print-access semantics only need two iframes.
-  // Both get an inert srcdoc (report markup). The snapshot never carries <script>
-  // into these frames because reports.js sanitizes first (sanitizeRenderHtml).
+  // Inline extractFn for the same function the harness builds. We do not load
+  // reports.js directly (it sits in an IIFE, depends on api/openModal/etc.).
+  // Instead, the Node runner embeds the function source via a token, after
+  // reading reports.js. That way we test the EXACT shipped code.
   return `<!doctype html><html><head><meta charset="utf-8"><title>iso</title></head><body>
 <iframe id="pv" sandbox="allow-modals"></iframe>
 <iframe id="so"></iframe>
@@ -67,7 +77,55 @@ var pv = document.getElementById('pv'); pv.srcdoc = '<h1>report</h1>';
 try { var p1 = pv.contentWindow.print; R.sandboxedPrint = 'callable'; } catch (e) { R.sandboxedPrint = 'SecurityError'; }
 var so = document.getElementById('so'); so.srcdoc = '<h1>report</h1>';
 try { var p2 = so.contentWindow.print; R.sameOriginPrint = 'callable:' + (typeof p2); } catch (e) { R.sameOriginPrint = 'err:' + e.name; }
-document.body.setAttribute('data-iso', JSON.stringify(R));
+
+// === Real printSanitizedHtml from reports.js (loaded by the Node runner) ===
+__EMBEDDED__
+var showToast = function(){ /* noop */ };
+// Child srcdoc wraps window.print to record what is on the page at print time
+// and to publish the captured body to window.parent so the harness can read it
+// even after the print iframe is removed from the DOM.
+function runPrintScenario() {
+  var REPORT = '<!doctype html><html><body><h1 id="rpt-title">REPORT-2026-09-07</h1><table><tr><td>批号 ABC-001</td></tr></table></body></html>';
+  var WRAPPER = '<!doctype html><html><head><script>'
+    + 'window.__printed = false;'
+    + 'var _orig = window.print.bind(window);'
+    + 'window.print = function(){ '
+    + '  window.__printed = true; '
+    + '  try { window.parent.__testBody = document.body && document.body.innerText; } catch(e){} '
+    + '  try { window.parent.__testDone = true; } catch(e){} '
+    + '  try { _orig(); } catch(e){} '
+    + '};'
+    + '<' + '/script></head><body>' + REPORT + '</body></html>';
+
+  window.__testBody = null;
+  window.__testDone = false;
+
+  // === Run the REAL printSanitizedHtml ===
+  printSanitizedHtml(WRAPPER);
+
+  // Poll for window.__testDone (set by the print wrapper inside the child).
+  var tries = 0;
+  var iv = setInterval(function(){
+    tries++;
+    if (window.__testDone) {
+      clearInterval(iv);
+      R.print = {
+        capturedBody: window.__testBody || '',
+        containsReport: !!(window.__testBody && window.__testBody.indexOf('REPORT-2026-09-07') !== -1),
+        containsBatch: !!(window.__testBody && window.__testBody.indexOf('批号 ABC-001') !== -1),
+        frameRemoved: !document.querySelector('iframe[aria-hidden="true"]'),
+      };
+      document.body.setAttribute('data-iso', JSON.stringify(R));
+      document.title = 'ISO:'+JSON.stringify(R);
+      return;
+    }
+    if (tries > 400) { clearInterval(iv);
+      R.print = { capturedBody: 'NEVER_CALLED', containsReport:false, containsBatch:false, frameRemoved:!document.querySelector('iframe[aria-hidden="true"]') };
+      document.body.setAttribute('data-iso', JSON.stringify(R));
+    }
+  }, 5);
+}
+runPrintScenario();
 </script></body></html>`;
 }
 
@@ -77,27 +135,44 @@ if (!browser) {
   process.exit(0);
 }
 
+const reports = readFileSync(join(root, "assets/js/pages/reports.js"), "utf8");
+const printFn = extractFn(reports, "printSanitizedHtml");
+const html = harnessHtml().replace("__EMBEDDED__", printFn);
+
 const dir = mkdtempSync(join(tmpdir(), "wb-iso-"));
 const htmlPath = join(dir, "iso.html");
-writeFileSync(htmlPath, harnessHtml(), "utf8");
+writeFileSync(htmlPath, html, "utf8");
 const url = "file:///" + htmlPath.replace(/\\/g, "/");
+
+// Single dump-dom pass with virtual-time-budget so async setInterval polls
+// complete before the DOM is serialized.
 const res = spawnSync(
   browser,
-  ["--headless=new", "--disable-gpu", "--no-sandbox", "--dump-dom", url],
+  ["--headless=new", "--disable-gpu", "--no-sandbox", "--virtual-time-budget=3000", "--dump-dom", url],
   { encoding: "utf8", timeout: 60000 },
 );
 rmSync(dir, { recursive: true, force: true });
 
 const dom = (res.stdout || "") + (res.stderr || "");
 const match = dom.match(/data-iso="([^"]*)"/);
-assert.ok(match, `headless run produced no data-iso (rc=${res.status}). dom head: ${dom.slice(0, 300)}`);
+if (!match) throw new Error(`no data-iso found (rc=${res.status}). dom head: ${dom.slice(0, 400)}`);
 const R = JSON.parse(match[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&'));
-// The sandboxed opaque-origin preview iframe is NOT printable by the parent
-// (SecurityError) — this is exactly why print uses a same-origin sanitized iframe.
+
+// === Assertion 1: sandboxed preview is NOT printable ===
 assert.equal(R.sandboxedPrint, "SecurityError",
   "sandboxed preview contentWindow.print must be SecurityError (opaque origin), got " + R.sandboxedPrint);
-// The plain same-origin srcdoc iframe that printSanitizedHtml actually uses is printable.
+
+// === Assertion 2: same-origin srcdoc iframe is printable ===
 assert.ok(String(R.sameOriginPrint).startsWith("callable:"),
   `same-origin print iframe must be callable, got ${R.sameOriginPrint}`);
+
+// === Assertion 3: real printSanitizedHtml actually fired and captured content ===
+assert.notEqual(R.print.capturedBody, "NEVER_CALLED", "print() was never called inside the print iframe");
+assert.notEqual(R.print.capturedBody, "", "print() captured empty body (race: about:blank printed before srcdoc loaded?)");
+assert.equal(R.print.containsReport, true,
+  `print() did not capture the report body; got ${JSON.stringify(R.print.capturedBody).slice(0, 200)}`);
+assert.equal(R.print.containsBatch, true,
+  `print() captured body missing report data; got ${JSON.stringify(R.print.capturedBody).slice(0, 200)}`);
+assert.equal(R.print.frameRemoved, true, "print iframe was not removed after print (cleanup leak)");
 
 console.log("behavior-reports-isolation (real browser): PASS");
