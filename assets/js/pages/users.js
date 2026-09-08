@@ -203,8 +203,9 @@
             if (!adds.length && !removes.length) { closeModal(modal); showToast('没有变更', 'info'); return; }
             closeModal(modal);
             // 仓库分配/解除属 legacy 用户生命周期操作，纳入电子签名门禁（签名哈希绑定业务参数：user_id/warehouse_id/reason/is_default）。
-            // 批量变更逐个串行签名（single-use token 每动作一次），任一步取消即中止；全部完成后统一刷新页面。
+            // 批量变更逐个串行签名（single-use token 每动作一次），任一步取消即中止；无论成功/取消/失败都刷新页面并给出准确提示。
             const done = [];
+            let cancelled = false;
             try {
                 for (const w of adds) {
                     const sigPayload = { user_id: id, warehouse_id: w.id, reason, is_default: false };
@@ -212,22 +213,32 @@
                         { action: 'USER_WAREHOUSE_ASSIGN', entity_type: 'User', entity_id: `${id}:${w.id}`, meaning: 'RESPONSIBILITY' },
                         { path: withReason(`/users/${id}/assign-warehouse?warehouse_id=${w.id}`, reason), opts: { method: 'POST' }, onSuccess: () => {}, successMessage: `已分配仓库 ${w.name}` },
                         '分配仓库', sigPayload);
-                    if (!ok) { showToast('已取消仓库变更', 'info'); return; }
+                    if (!ok) { cancelled = true; break; }
                     done.push(`分配 ${w.name}`);
                 }
-                for (const w of removes) {
-                    const sigPayload = { user_id: id, warehouse_id: w.id, reason };
-                    const ok = await signAction(
-                        { action: 'USER_WAREHOUSE_UNASSIGN', entity_type: 'User', entity_id: `${id}:${w.id}`, meaning: 'REVIEW' },
-                        { path: withReason(`/users/${id}/unassign-warehouse?warehouse_id=${w.id}`, reason), opts: { method: 'DELETE' }, onSuccess: () => {}, successMessage: `已解除仓库 ${w.name}` },
-                        '取消仓库分配', sigPayload);
-                    if (!ok) { showToast('已取消仓库变更', 'info'); return; }
-                    done.push(`解除 ${w.name}`);
+                if (!cancelled) {
+                    for (const w of removes) {
+                        const sigPayload = { user_id: id, warehouse_id: w.id, reason };
+                        const ok = await signAction(
+                            { action: 'USER_WAREHOUSE_UNASSIGN', entity_type: 'User', entity_id: `${id}:${w.id}`, meaning: 'REVIEW' },
+                            { path: withReason(`/users/${id}/unassign-warehouse?warehouse_id=${w.id}`, reason), opts: { method: 'DELETE' }, onSuccess: () => {}, successMessage: `已解除仓库 ${w.name}` },
+                            '取消仓库分配', sigPayload);
+                        if (!ok) { cancelled = true; break; }
+                        done.push(`解除 ${w.name}`);
+                    }
                 }
-                if (done.length) showToast(`仓库变更完成：${done.join('、')}`, 'success');
-                await load();
             } catch (e) {
+                await load();
                 showToast(e.message || '仓库变更失败', 'error');
+                return;
+            }
+            await load();
+            if (cancelled && done.length) {
+                showToast(`部分完成：${done.join('、')}；其余已取消`, 'warning');
+            } else if (cancelled) {
+                showToast('已取消，未做任何变更', 'info');
+            } else if (done.length) {
+                showToast(`仓库变更完成：${done.join('、')}`, 'success');
             }
         });
     }
