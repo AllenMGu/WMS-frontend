@@ -166,10 +166,10 @@
         modal.querySelector('#duSubmit').addEventListener('click', async () => {
             const reason = modal.querySelector('#duReason').value.trim();
             if (reason.length < 3) { showToast('停用原因不能少于3个字', 'warning'); return; }
-            try {
-                await api(`/users/${id}`, { method: 'PUT', body: { is_active: false, access_change_reason: reason } });
-                closeModal(modal); showToast('用户已停用', 'success'); await load();
-            } catch (e) { showToast(e.message, 'error'); }
+            closeModal(modal);
+            // 停用属 legacy 用户生命周期操作，纳入电子签名门禁：后端 PUT /users/{id} 在 is_active==false 分支要求 X-GSP-Signature-Token
+            signAction({ action: 'USER_ACCESS_REVOKED', entity_type: 'User', entity_id: id, meaning: 'RESPONSIBILITY' },
+                { path: `/users/${id}`, opts: { method: 'PUT', body: { is_active: false, access_change_reason: reason } } }, '停用用户');
         });
     }
 
@@ -200,11 +200,18 @@
             const adds = allWh.filter(w => wanted.has(w.id) && !curSet.has(w.id));
             const removes = curWh.filter(w => !wanted.has(w.id));
             if (!adds.length && !removes.length) { closeModal(modal); showToast('没有变更', 'info'); return; }
-            try {
-                for (const w of adds) await api(withReason(`/users/${id}/assign-warehouse?warehouse_id=${w.id}`, reason), { method: 'POST' });
-                for (const w of removes) await api(withReason(`/users/${id}/unassign-warehouse?warehouse_id=${w.id}`, reason), { method: 'DELETE' });
-                closeModal(modal); showToast(`已分配 ${adds.length} 个、解除 ${removes.length} 个仓库`, 'success'); await load();
-            } catch (e) { showToast(e.message, 'error'); }
+            closeModal(modal);
+            // 仓库分配/解除属 legacy 用户生命周期操作，纳入电子签名门禁：后端 POST assign-warehouse / DELETE unassign-warehouse 要求 X-GSP-Signature-Token。
+            // 后端该两端 challenge payload 为 {}（reason 走 query），故 opts 不传 body；批量多仓库会逐个触发签名弹窗（single-use token 每个动作一次），为合规必要。
+            for (const w of adds) {
+                signAction({ action: 'USER_WAREHOUSE_ASSIGN', entity_type: 'User', entity_id: `${id}:${w.id}`, meaning: 'RESPONSIBILITY' },
+                    { path: withReason(`/users/${id}/assign-warehouse?warehouse_id=${w.id}`, reason), opts: { method: 'POST' } }, '分配仓库');
+            }
+            for (const w of removes) {
+                signAction({ action: 'USER_WAREHOUSE_UNASSIGN', entity_type: 'User', entity_id: `${id}:${w.id}`, meaning: 'REVIEW' },
+                    { path: withReason(`/users/${id}/unassign-warehouse?warehouse_id=${w.id}`, reason), opts: { method: 'DELETE' } }, '取消仓库分配');
+            }
+            showToast(`已发起 ${adds.length} 个分配、${removes.length} 个解除的签名确认`, 'info');
         });
     }
 
