@@ -63,8 +63,8 @@
         ub.innerHTML = users.map(u => {
             const active = u.is_active !== false;
             const actions = isAdmin() ? `
-            ${active ? `<button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="PG('users').disableUser(${u.id})"><i class="fa fa-ban"></i> 停用</button>` : badge('需审批启用', 'warning')}
-            ${u.role !== 'admin' ? `<button class="btn btn-link btn-sm" onclick="PG('users').openAssignWarehouses(${u.id})"><i class="fa fa-building"></i> 分配仓库</button>` : ''}` : '';
+            ${active ? `<button class="btn btn-link btn-sm" style="color:var(--red-600)" data-action="users.disableUser" data-arg1="${u.id}"><i class="fa fa-ban"></i> 停用</button>` : badge('需审批启用', 'warning')}
+            ${u.role !== 'admin' ? `<button class="btn btn-link btn-sm" data-action="users.openAssignWarehouses" data-arg1="${u.id}"><i class="fa fa-building"></i> 分配仓库</button>` : ''}` : '';
             return `
         <tr>
             <td>${u.id}</td>
@@ -87,7 +87,7 @@
             <td>${fmtDT(r.review_due_at)}</td>
             <td>${r.is_active ? badge('有效', 'success') : badge('已撤销', 'gray')}</td>
             <td class="actions">
-                ${r.is_active ? `<button class="btn btn-link btn-sm" onclick="PG('users').reviewRole(${r.id})"><i class="fa fa-refresh"></i> 复核</button><button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="PG('users').revokeRole(${r.id})"><i class="fa fa-ban"></i> 撤销</button>` : ''}
+                ${r.is_active ? `<button class="btn btn-link btn-sm" data-action="users.reviewRole" data-arg1="${r.id}"><i class="fa fa-refresh"></i> 复核</button><button class="btn btn-link btn-sm" style="color:var(--red-600)" data-action="users.revokeRole" data-arg1="${r.id}"><i class="fa fa-ban"></i> 撤销</button>` : ''}
             </td>
         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无岗位授权（首次需先授予 QUALITY_MANAGER）</div></td></tr>';
     }
@@ -166,10 +166,11 @@
         modal.querySelector('#duSubmit').addEventListener('click', async () => {
             const reason = modal.querySelector('#duReason').value.trim();
             if (reason.length < 3) { showToast('停用原因不能少于3个字', 'warning'); return; }
-            try {
-                await api(`/users/${id}`, { method: 'PUT', body: { is_active: false, access_change_reason: reason } });
-                closeModal(modal); showToast('用户已停用', 'success'); await load();
-            } catch (e) { showToast(e.message, 'error'); }
+            closeModal(modal);
+            // 停用属 legacy 用户生命周期操作，纳入电子签名门禁：后端 PUT /users/{id} 在 is_active==false 分支要求 X-GSP-Signature-Token
+            const sigPayload = { is_active: false, access_change_reason: reason };
+            await signAction({ action: 'USER_ACCESS_REVOKED', entity_type: 'User', entity_id: id, meaning: 'RESPONSIBILITY' },
+                { path: `/users/${id}`, opts: { method: 'PUT', body: { ...sigPayload } } }, '停用用户', sigPayload);
         });
     }
 
@@ -200,11 +201,45 @@
             const adds = allWh.filter(w => wanted.has(w.id) && !curSet.has(w.id));
             const removes = curWh.filter(w => !wanted.has(w.id));
             if (!adds.length && !removes.length) { closeModal(modal); showToast('没有变更', 'info'); return; }
+            closeModal(modal);
+            // 仓库分配/解除属 legacy 用户生命周期操作，纳入电子签名门禁（签名哈希绑定业务参数：user_id/warehouse_id/reason/is_default）。
+            // 批量变更逐个串行签名（single-use token 每动作一次），任一步取消即中止；无论成功/取消/失败都刷新页面并给出准确提示。
+            const done = [];
+            let cancelled = false;
             try {
-                for (const w of adds) await api(withReason(`/users/${id}/assign-warehouse?warehouse_id=${w.id}`, reason), { method: 'POST' });
-                for (const w of removes) await api(withReason(`/users/${id}/unassign-warehouse?warehouse_id=${w.id}`, reason), { method: 'DELETE' });
-                closeModal(modal); showToast(`已分配 ${adds.length} 个、解除 ${removes.length} 个仓库`, 'success'); await load();
-            } catch (e) { showToast(e.message, 'error'); }
+                for (const w of adds) {
+                    const sigPayload = { user_id: id, warehouse_id: w.id, reason, is_default: false };
+                    const ok = await signAction(
+                        { action: 'USER_WAREHOUSE_ASSIGN', entity_type: 'User', entity_id: `${id}:${w.id}`, meaning: 'RESPONSIBILITY' },
+                        { path: withReason(`/users/${id}/assign-warehouse?warehouse_id=${w.id}`, reason), opts: { method: 'POST' }, onSuccess: () => {}, successMessage: `已分配仓库 ${w.name}` },
+                        '分配仓库', sigPayload);
+                    if (!ok) { cancelled = true; break; }
+                    done.push(`分配 ${w.name}`);
+                }
+                if (!cancelled) {
+                    for (const w of removes) {
+                        const sigPayload = { user_id: id, warehouse_id: w.id, reason };
+                        const ok = await signAction(
+                            { action: 'USER_WAREHOUSE_UNASSIGN', entity_type: 'User', entity_id: `${id}:${w.id}`, meaning: 'REVIEW' },
+                            { path: withReason(`/users/${id}/unassign-warehouse?warehouse_id=${w.id}`, reason), opts: { method: 'DELETE' }, onSuccess: () => {}, successMessage: `已解除仓库 ${w.name}` },
+                            '取消仓库分配', sigPayload);
+                        if (!ok) { cancelled = true; break; }
+                        done.push(`解除 ${w.name}`);
+                    }
+                }
+            } catch (e) {
+                await load();
+                showToast(e.message || '仓库变更失败', 'error');
+                return;
+            }
+            await load();
+            if (cancelled && done.length) {
+                showToast(`部分完成：${done.join('、')}；其余已取消`, 'warning');
+            } else if (cancelled) {
+                showToast('已取消，未做任何变更', 'info');
+            } else if (done.length) {
+                showToast(`仓库变更完成：${done.join('、')}`, 'success');
+            }
         });
     }
 

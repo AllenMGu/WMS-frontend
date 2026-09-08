@@ -513,24 +513,28 @@ async function createSignatureChallenge({ action, entity_type, entity_id, meanin
         logoutOn401: false,
     });
 }
-async function signAndCall(path, opts, sigSpec, reason, password) {
+async function signAndCall(path, opts, sigSpec, reason, password, sigPayload) {
     const challenge = await createSignatureChallenge({
         action: sigSpec.action,
         entity_type: sigSpec.entity_type,
         entity_id: String(sigSpec.entity_id),
         meaning: sigSpec.meaning,
-        payload: opts.body || {},
+        payload: sigPayload || opts.body || {},
         reason,
         password,
     });
     return api(path, { ...opts, sigToken: challenge.signature_token });
 }
-/* 打开电子签名确认弹窗：reason + password，然后执行 signedCall(reason, password) */
+/* 打开电子签名确认弹窗：reason + password，然后执行 signedCall(reason, password)。
+   返回 Promise：签署成功 resolve(true)；用户取消/关闭 resolve(false)（失败可重试，不 resolve）。 */
 function openSignatureModal(title, signedCall) {
-    const modal = openModal({
-        title: title || '电子签名确认',
-        size: 'sm',
-        body: `
+    return new Promise((resolve) => {
+        let settled = false;
+        const settle = (val) => { if (!settled) { settled = true; resolve(val); } };
+        const modal = openModal({
+            title: title || '电子签名确认',
+            size: 'sm',
+            body: `
             <div class="form-group">
                 <label class="form-label">变更原因（≥3字，将写入审计链与签名记录）</label>
                 <textarea id="sigReason" class="input-field" rows="2" placeholder="请输入操作原因"></textarea>
@@ -540,38 +544,44 @@ function openSignatureModal(title, signedCall) {
                 <input type="password" id="sigPassword" class="input-field" placeholder="请输入当前用户密码">
             </div>
         `,
-        footer: `
+            footer: `
             <button class="btn btn-secondary" data-close>取消</button>
             <button class="btn btn-primary" id="sigConfirmBtn"><i class="fa fa-pencil"></i> 确认签署</button>
         `,
+        });
+        const reasonEl = modal.querySelector('#sigReason');
+        const passEl = modal.querySelector('#sigPassword');
+        const btn = modal.querySelector('#sigConfirmBtn');
+        // 弹窗被关闭（取消/遮罩/×）视为用户放弃本次签名
+        const observer = new MutationObserver(() => {
+            if (!document.body.contains(modal)) { observer.disconnect(); settle(false); }
+        });
+        observer.observe(document.body, { childList: true });
+        const doSign = async () => {
+            const reason = reasonEl.value.trim();
+            const password = passEl.value;
+            if (reason.length < 3) { showToast('变更原因不能少于3个字', 'warning'); return; }
+            if (!password) { showToast('请输入登录密码', 'warning'); return; }
+            btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 签署中...';
+            try {
+                await signedCall(reason, password);
+                settle(true);
+                closeModal(modal);
+            } catch (e) {
+                showToast(e.message || '电子签名或操作失败', 'error');
+                btn.disabled = false; btn.innerHTML = '<i class="fa fa-pencil"></i> 确认签署';
+            }
+        };
+        btn.addEventListener('click', doSign);
+        reasonEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSign(); });
+        setTimeout(() => passEl.focus(), 100);
     });
-    const reasonEl = modal.querySelector('#sigReason');
-    const passEl = modal.querySelector('#sigPassword');
-    const btn = modal.querySelector('#sigConfirmBtn');
-    const doSign = async () => {
-        const reason = reasonEl.value.trim();
-        const password = passEl.value;
-        if (reason.length < 3) { showToast('变更原因不能少于3个字', 'warning'); return; }
-        if (!password) { showToast('请输入登录密码', 'warning'); return; }
-        btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 签署中...';
-        try {
-            await signedCall(reason, password);
-            closeModal(modal);
-        } catch (e) {
-            showToast(e.message || '电子签名或操作失败', 'error');
-        } finally {
-            btn.disabled = false; btn.innerHTML = '<i class="fa fa-pencil"></i> 确认签署';
-        }
-    };
-    btn.addEventListener('click', doSign);
-    modal.querySelector('[data-close]').addEventListener('click', () => closeModal(modal));
-    reasonEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSign(); });
-    setTimeout(() => passEl.focus(), 100);
-    return modal;
 }
-/* 便捷封装：页面只需提供 sigSpec + 业务调用 */
-function signAction(sigSpec, businessCall, title) {
-    openSignatureModal(title || `${sigSpec.action} - 需要电子签名`, async (reason, password) => {
+/* 便捷封装：页面只需提供 sigSpec + 业务调用 + 可选 sigPayload（签名哈希需覆盖的业务参数）。
+   sigPayload 与业务接口 consume 端构造的规范化 payload 必须完全一致。
+   返回 Promise：签名成功 resolve(true)，取消 resolve(false)。 */
+function signAction(sigSpec, businessCall, title, sigPayload) {
+    return openSignatureModal(title || `${sigSpec.action} - 需要电子签名`, async (reason, password) => {
         const opts = businessCall.opts || {};
         // 业务请求体中的 reason 若为空，则复用签名弹窗填写的变更原因（接口要求 ≥3 字）
         let body = opts.body;
@@ -581,7 +591,7 @@ function signAction(sigSpec, businessCall, title) {
                 body.reason = reason;
             }
         }
-        const data = await signAndCall(businessCall.path, { ...opts, body }, sigSpec, reason, password);
+        const data = await signAndCall(businessCall.path, { ...opts, body }, sigSpec, reason, password, sigPayload);
         showToast(businessCall.successMessage || '操作成功', 'success');
         if (businessCall.onSuccess) {
             await businessCall.onSuccess(data);
@@ -923,10 +933,35 @@ function optionHTML(items, valueKey, labelKey, placeholder) {
 }
 
 /* ----------------------------- SPA 模块 ----------------------------- */
-/* 命名空间：PAGES[key] = { title, icon, desc, init, fn }，PG(key) 取模块的 fn（供 onclick 内联调用） */
+/* 命名空间：PAGES[key] = { title, icon, desc, init, fn }，PG(key) 取模块的 fn（供内联调用） */
 function PG(key) {
     return (window.PAGES && window.PAGES[key] && window.PAGES[key].fn) || {};
 }
+
+/* 事件委托：替代内联 onclick。按钮形如 data-action="module.method"
+   + data-arg1/data-arg2/...（数字或 null），由 document 级委托统一分发，
+   天然覆盖 innerHTML 动态生成的按钮，从而允许 CSP 去掉 script-src 'unsafe-inline'。 */
+document.addEventListener('click', function (e) {
+    const el = e.target.closest('[data-action]');
+    if (!el) return;
+    const action = el.dataset.action;
+    if (action === 'window.print') { window.print(); return; }
+    const dot = action.indexOf('.');
+    if (dot < 0) return;
+    const mod = action.slice(0, dot);
+    const method = action.slice(dot + 1);
+    const page = (window.PAGES && window.PAGES[mod] && window.PAGES[mod].fn) || {};
+    const fn = page[method];
+    if (typeof fn !== 'function') return;
+    const args = [];
+    for (let i = 1; i <= 5; i++) {
+        const k = 'arg' + i;
+        if (el.dataset[k] === undefined) break;
+        const v = el.dataset[k];
+        args.push(v === 'null' ? null : Number(v));
+    }
+    fn.apply(null, args);
+});
 
 /* ----------------------------- 页面引导 ----------------------------- */
 document.addEventListener('DOMContentLoaded', async function () {

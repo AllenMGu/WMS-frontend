@@ -66,10 +66,10 @@
                                 ${(o.items || []).map(i => `<span class="text-xs text-gray-600">${esc(goodsList.find(g => g.id === i.goods_id)?.name || i.goods_id)} × ${fmtNum(i.ordered_quantity)}${esc(i.unit)}</span><br>`).join('')}
                             </td>
                             <td class="actions">
-                                ${o.status === 'DRAFT' && hasAnyGspRole('PROCUREMENT') ? `<button class="btn btn-link btn-sm" onclick="PG('procurement').submitPO(${o.id})"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
-                                ${o.status === 'DRAFT' && hasAnyGspRole('PROCUREMENT') ? `<button class="btn btn-link btn-sm" onclick="PG('procurement').cancelPO(${o.id})"><i class="fa fa-ban"></i> 取消</button>` : ''}
-                                ${o.status === 'SUBMITTED' && hasAnyGspRole('QUALITY_MANAGER', 'QUALITY_REVIEWER') ? `<button class="btn btn-link btn-sm" onclick="PG('procurement').approvePO(${o.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
-                                ${o.status === 'SUBMITTED' && hasAnyGspRole('QUALITY_MANAGER', 'QUALITY_REVIEWER') ? `<button class="btn btn-link btn-sm" onclick="PG('procurement').rejectPO(${o.id})"><i class="fa fa-times"></i> 驳回</button>` : ''}
+                                ${o.status === 'DRAFT' && hasAnyGspRole('PROCUREMENT') ? `<button class="btn btn-link btn-sm" data-action="procurement.submitPO" data-arg1="${o.id}"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
+                                ${o.status === 'DRAFT' && hasAnyGspRole('PROCUREMENT') ? `<button class="btn btn-link btn-sm" data-action="procurement.cancelPO" data-arg1="${o.id}"><i class="fa fa-ban"></i> 取消</button>` : ''}
+                                ${o.status === 'SUBMITTED' && hasAnyGspRole('QUALITY_MANAGER', 'QUALITY_REVIEWER') ? `<button class="btn btn-link btn-sm" data-action="procurement.approvePO" data-arg1="${o.id}"><i class="fa fa-check"></i> 批准</button>` : ''}
+                                ${o.status === 'SUBMITTED' && hasAnyGspRole('QUALITY_MANAGER', 'QUALITY_REVIEWER') ? `<button class="btn btn-link btn-sm" data-action="procurement.rejectPO" data-arg1="${o.id}"><i class="fa fa-times"></i> 驳回</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无采购订单</div></td></tr>'}</tbody>
                 </table>
@@ -198,9 +198,9 @@
                                 ${(r.items || []).map(i => `<span class="text-xs text-gray-600">${esc(i.batch_no)} 收${fmtNum(i.received_quantity)} / 验${fmtNum(i.accepted_quantity)} <span class="badge badge-${i.inspection_status === 'ACCEPTED' ? 'success' : i.inspection_status === 'REJECTED' ? 'danger' : 'warning'}">${esc(i.inspection_status)}</span></span><br>`).join('')}
                             </td>
                             <td class="actions">
-                                ${(r.items || []).filter(i => i.inspection_status === 'PENDING' && !i.sampled_at).map(i => `<button class="btn btn-link btn-sm" onclick="PG('procurement').sampleItem(${r.id}, ${i.id})"><i class="fa fa-flask"></i> 抽样</button>`).join('')}
-                                ${(r.items || []).filter(i => i.inspection_status === 'PENDING' && i.sampled_at).map(i => `<button class="btn btn-link btn-sm" onclick="PG('procurement').inspectItem(${r.id}, ${i.id})"><i class="fa fa-search"></i> 验收</button>`).join('')}
-                                <button class="btn btn-link btn-sm" onclick="PG('procurement').printRecord(${r.id})"><i class="fa fa-print"></i> 受控打印</button>
+                                ${(r.items || []).filter(i => i.inspection_status === 'PENDING' && !i.sampled_at).map(i => `<button class="btn btn-link btn-sm" data-action="procurement.sampleItem" data-arg1="${r.id}" data-arg2="${i.id}"><i class="fa fa-flask"></i> 抽样</button>`).join('')}
+                                ${(r.items || []).filter(i => i.inspection_status === 'PENDING' && i.sampled_at).map(i => `<button class="btn btn-link btn-sm" data-action="procurement.inspectItem" data-arg1="${r.id}" data-arg2="${i.id}"><i class="fa fa-search"></i> 验收</button>`).join('')}
+                                <button class="btn btn-link btn-sm" data-action="procurement.printRecord" data-arg1="${r.id}"><i class="fa fa-print"></i> 受控打印</button>
                             </td>
                         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无收货记录</div></td></tr>'}</tbody>
                 </table>

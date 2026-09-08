@@ -87,7 +87,7 @@
             const supplier = partners.find(p => p.id === a.supplier_id);
             const goods = goodsList.find(g => g.id === a.goods_id);
             const state = a.status === 'PENDING' ? badge('待审批', 'warning') : a.valid_to < today ? badge('已过期', 'danger') : badge(`${authorizationWarningDays}天内到期`, 'warning');
-            return `<tr><td>${esc(supplier?.name || `供应商 #${a.supplier_id}`)}</td><td>${esc(goods ? `${goods.name}（${goods.spec || ''}）` : `货物 #${a.goods_id}`)}</td><td>${fmtD(a.valid_to)}</td><td>${state}</td><td><button class="btn btn-link btn-sm" onclick="PG('partners').viewPartner(${a.supplier_id})">查看处理</button></td></tr>`;
+            return `<tr><td>${esc(supplier?.name || `供应商 #${a.supplier_id}`)}</td><td>${esc(goods ? `${goods.name}（${goods.spec || ''}）` : `货物 #${a.goods_id}`)}</td><td>${fmtD(a.valid_to)}</td><td>${state}</td><td><button class="btn btn-link btn-sm" data-action="partners.viewPartner" data-arg1="${a.supplier_id}">查看处理</button></td></tr>`;
         }).join('')}</tbody></table></div>`;
     }
 
@@ -112,9 +112,9 @@
             <td>${p.approved_by ? `用户 #${esc(p.approved_by)}` : '-'}</td>
             <td>${statusBadge(p.status)}</td>
             <td class="actions">
-                <button class="btn btn-link btn-sm" onclick="PG('partners').viewPartner(${p.id})"><i class="fa fa-folder-open-o"></i> 资质/品种</button>
-                ${p.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('partners').approvePartner(${p.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
-                ${p.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="PG('partners').suspendPartner(${p.id})"><i class="fa fa-pause"></i> 暂停</button>` : ''}
+                <button class="btn btn-link btn-sm" data-action="partners.viewPartner" data-arg1="${p.id}"><i class="fa fa-folder-open-o"></i> 资质/品种</button>
+                ${p.status === 'PENDING' ? `<button class="btn btn-link btn-sm" data-action="partners.approvePartner" data-arg1="${p.id}"><i class="fa fa-check"></i> 批准</button>` : ''}
+                ${p.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" style="color:var(--red-600)" data-action="partners.suspendPartner" data-arg1="${p.id}"><i class="fa fa-pause"></i> 暂停</button>` : ''}
             </td>
         </tr>`).join('');
     }
@@ -254,7 +254,7 @@
                 <td>${d.verified_by ? `用户 #${esc(d.verified_by)}` : '-'}</td>
                 <td>${statusBadge(d.status)}</td>
                 <td class="actions">
-                    ${d.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('partners').verifyDoc(${id}, ${d.id})"><i class="fa fa-check-circle"></i> 核验</button>` : ''}
+                    ${d.status === 'PENDING' ? `<button class="btn btn-link btn-sm" data-action="partners.verifyDoc" data-arg1="${id}" data-arg2="${d.id}"><i class="fa fa-check-circle"></i> 核验</button>` : ''}
                 </td>
             </tr>`).join('') : '<tr><td colspan="9"><div class="empty-state">暂无资质文件</div></td></tr>';
         };
@@ -266,7 +266,7 @@
                 tbody.innerHTML = authorizations.length ? authorizations.map(a => {
                     const goods = goodsList.find(g => g.id === a.goods_id);
                     const profile = productProfiles.find(x => x.goods_id === a.goods_id);
-                    return `<tr><td>${esc(goods ? `${goods.name}（${goods.spec || ''}）` : `货物 #${a.goods_id}`)}</td><td>${esc(profile?.approval_no || '-')}</td><td>${esc(profile?.manufacturer || '-')}</td><td>${esc(a.scope_description)}</td><td>${fmtD(a.valid_from)} ~ ${fmtD(a.valid_to)}</td><td>#${a.updated_by} / ${a.approved_by ? `#${a.approved_by}` : '-'}</td><td>${statusBadge(a.status)}</td><td class="actions">${a.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('partners').approveSupplierProduct(${id}, ${a.id})">批准</button>` : ''}${a.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="PG('partners').suspendSupplierProduct(${id}, ${a.id})">暂停</button>` : ''}<button class="btn btn-link btn-sm" onclick="PG('partners').editSupplierProduct(${id}, ${a.goods_id})">更新</button></td></tr>`;
+                    return `<tr><td>${esc(goods ? `${goods.name}（${goods.spec || ''}）` : `货物 #${a.goods_id}`)}</td><td>${esc(profile?.approval_no || '-')}</td><td>${esc(profile?.manufacturer || '-')}</td><td>${esc(a.scope_description)}</td><td>${fmtD(a.valid_from)} ~ ${fmtD(a.valid_to)}</td><td>#${a.updated_by} / ${a.approved_by ? `#${a.approved_by}` : '-'}</td><td>${statusBadge(a.status)}</td><td class="actions">${a.status === 'PENDING' ? `<button class="btn btn-link btn-sm" data-action="partners.approveSupplierProduct" data-arg1="${id}" data-arg2="${a.id}">批准</button>` : ''}${a.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" data-action="partners.suspendSupplierProduct" data-arg1="${id}" data-arg2="${a.id}">暂停</button>` : ''}<button class="btn btn-link btn-sm" data-action="partners.editSupplierProduct" data-arg1="${id}" data-arg2="${a.goods_id}">更新</button></td></tr>`;
                 }).join('') : '<tr><td colspan="8"><div class="empty-state">尚未建立供货品种目录；该供应商不能用于药品采购</div></td></tr>';
             };
             renderAuthorizations();

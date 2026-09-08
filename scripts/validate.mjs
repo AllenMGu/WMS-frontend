@@ -35,6 +35,7 @@ const requiredFiles = [
   "app.html",
   "assets/js/common.js",
   "assets/js/app.js",
+  "assets/js/login.js",
   ...modules.map((name) => `assets/js/pages/${name}.js`),
 ];
 
@@ -45,6 +46,7 @@ for (const file of requiredFiles) {
 if (errors.length === 0) {
   const appHtml = readFileSync("app.html", "utf8");
   const indexHtml = readFileSync("index.html", "utf8");
+  const login = readFileSync("assets/js/login.js", "utf8");
   const common = readFileSync("assets/js/common.js", "utf8");
   const app = readFileSync("assets/js/app.js", "utf8");
   const warehouses = readFileSync("assets/js/pages/warehouses.js", "utf8");
@@ -66,7 +68,7 @@ if (errors.length === 0) {
   if (configIndex < 0 || commonIndex < 0 || configIndex > commonIndex) {
     errors.push("app.html 必须在 common.js 之前加载 config.js");
   }
-  if (!indexHtml.includes("config.js") || !indexHtml.includes("window.WMS_CONFIG?.apiBaseUrl")) {
+  if (!indexHtml.includes("config.js") || !login.includes("window.WMS_CONFIG?.apiBaseUrl")) {
     errors.push("登录页未使用运行时 API 配置");
   }
   if (!common.includes("window.WMS_CONFIG?.apiBaseUrl")) {

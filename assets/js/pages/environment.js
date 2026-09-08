@@ -63,8 +63,8 @@ async function renderDevices(box) {
                             <td>${fmtD(d.calibration_valid_to)} ${d.calibration_valid_to && new Date(d.calibration_valid_to) < new Date() ? badge('已过期', 'danger') : ''}</td>
                             <td>${statusBadge(d.status)}</td>
                             <td class="actions">
-                                ${d.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('environment').decideDevice(${d.id})"><i class="fa fa-gavel"></i> 审批</button>` : ''}
-                                ${d.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="PG('environment').recalibrateDevice(${d.id})"><i class="fa fa-wrench"></i> 校准</button><button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="PG('environment').suspendDevice(${d.id})"><i class="fa fa-pause"></i> 停用</button>` : ''}
+                                ${d.status === 'PENDING' ? `<button class="btn btn-link btn-sm" data-action="environment.decideDevice" data-arg1="${d.id}"><i class="fa fa-gavel"></i> 审批</button>` : ''}
+                                ${d.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" data-action="environment.recalibrateDevice" data-arg1="${d.id}"><i class="fa fa-wrench"></i> 校准</button><button class="btn btn-link btn-sm" style="color:var(--red-600)" data-action="environment.suspendDevice" data-arg1="${d.id}"><i class="fa fa-pause"></i> 停用</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无监测设备</div></td></tr>'}</tbody>
                 </table>
@@ -195,8 +195,8 @@ async function renderAssignments(box) {
                             <td>${fmtDT(a.last_reading_at)}</td>
                             <td>${statusBadge(a.status)}</td>
                             <td class="actions">
-                                ${a.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('environment').decideAssignment(${a.id})"><i class="fa fa-gavel"></i> 审批</button>` : ''}
-                                ${a.status === 'ACTIVE' ? `<button class="btn btn-link btn-sm" onclick="PG('environment').addReading(${a.id})"><i class="fa fa-plus-circle"></i> 录入读数</button><button class="btn btn-link btn-sm" onclick="PG('environment').viewReadings(${a.id})"><i class="fa fa-table"></i> 读数</button><button class="btn btn-link btn-sm" onclick="PG('environment').verifyReadingChain(${a.id})"><i class="fa fa-link"></i> 核验链</button><button class="btn btn-link btn-sm" onclick="PG('environment').closeAssignment(${a.id})"><i class="fa fa-times"></i> 关闭</button>` : ''}
+                                ${a.status === 'PENDING' ? `<button class="btn btn-link btn-sm" data-action="environment.decideAssignment" data-arg1="${a.id}"><i class="fa fa-gavel"></i> 审批</button>` : ''}
+                                ${a.status === 'ACTIVE' ? `<button class="btn btn-link btn-sm" data-action="environment.addReading" data-arg1="${a.id}"><i class="fa fa-plus-circle"></i> 录入读数</button><button class="btn btn-link btn-sm" data-action="environment.viewReadings" data-arg1="${a.id}"><i class="fa fa-table"></i> 读数</button><button class="btn btn-link btn-sm" data-action="environment.verifyReadingChain" data-arg1="${a.id}"><i class="fa fa-link"></i> 核验链</button><button class="btn btn-link btn-sm" data-action="environment.closeAssignment" data-arg1="${a.id}"><i class="fa fa-times"></i> 关闭</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无监测点位</div></td></tr>'}</tbody>
                 </table>
@@ -386,8 +386,8 @@ async function renderAlarms(box) {
                             <td>${fmtDT(a.opened_at)}</td>
                             <td>${statusBadge(a.status)}</td>
                             <td class="actions">
-                                ${a.status === 'OPEN' ? `<button class="btn btn-link btn-sm" onclick="PG('environment').ackAlarm(${a.id})"><i class="fa fa-check"></i> 确认</button>` : ''}
-                                ${['OPEN', 'ACKNOWLEDGED'].includes(a.status) ? `<button class="btn btn-link btn-sm" onclick="PG('environment').decideAlarm(${a.id})"><i class="fa fa-gavel"></i> 决策</button>` : ''}
+                                ${a.status === 'OPEN' ? `<button class="btn btn-link btn-sm" data-action="environment.ackAlarm" data-arg1="${a.id}"><i class="fa fa-check"></i> 确认</button>` : ''}
+                                ${['OPEN', 'ACKNOWLEDGED'].includes(a.status) ? `<button class="btn btn-link btn-sm" data-action="environment.decideAlarm" data-arg1="${a.id}"><i class="fa fa-gavel"></i> 决策</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无告警记录</div></td></tr>'}</tbody>
                 </table>
