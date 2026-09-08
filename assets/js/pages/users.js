@@ -168,8 +168,9 @@
             if (reason.length < 3) { showToast('停用原因不能少于3个字', 'warning'); return; }
             closeModal(modal);
             // 停用属 legacy 用户生命周期操作，纳入电子签名门禁：后端 PUT /users/{id} 在 is_active==false 分支要求 X-GSP-Signature-Token
-            signAction({ action: 'USER_ACCESS_REVOKED', entity_type: 'User', entity_id: id, meaning: 'RESPONSIBILITY' },
-                { path: `/users/${id}`, opts: { method: 'PUT', body: { is_active: false, access_change_reason: reason } } }, '停用用户');
+            const sigPayload = { is_active: false, access_change_reason: reason };
+            await signAction({ action: 'USER_ACCESS_REVOKED', entity_type: 'User', entity_id: id, meaning: 'RESPONSIBILITY' },
+                { path: `/users/${id}`, opts: { method: 'PUT', body: { ...sigPayload } } }, '停用用户', sigPayload);
         });
     }
 
@@ -201,17 +202,33 @@
             const removes = curWh.filter(w => !wanted.has(w.id));
             if (!adds.length && !removes.length) { closeModal(modal); showToast('没有变更', 'info'); return; }
             closeModal(modal);
-            // 仓库分配/解除属 legacy 用户生命周期操作，纳入电子签名门禁：后端 POST assign-warehouse / DELETE unassign-warehouse 要求 X-GSP-Signature-Token。
-            // 后端该两端 challenge payload 为 {}（reason 走 query），故 opts 不传 body；批量多仓库会逐个触发签名弹窗（single-use token 每个动作一次），为合规必要。
-            for (const w of adds) {
-                signAction({ action: 'USER_WAREHOUSE_ASSIGN', entity_type: 'User', entity_id: `${id}:${w.id}`, meaning: 'RESPONSIBILITY' },
-                    { path: withReason(`/users/${id}/assign-warehouse?warehouse_id=${w.id}`, reason), opts: { method: 'POST' } }, '分配仓库');
+            // 仓库分配/解除属 legacy 用户生命周期操作，纳入电子签名门禁（签名哈希绑定业务参数：user_id/warehouse_id/reason/is_default）。
+            // 批量变更逐个串行签名（single-use token 每动作一次），任一步取消即中止；全部完成后统一刷新页面。
+            const done = [];
+            try {
+                for (const w of adds) {
+                    const sigPayload = { user_id: id, warehouse_id: w.id, reason, is_default: false };
+                    const ok = await signAction(
+                        { action: 'USER_WAREHOUSE_ASSIGN', entity_type: 'User', entity_id: `${id}:${w.id}`, meaning: 'RESPONSIBILITY' },
+                        { path: withReason(`/users/${id}/assign-warehouse?warehouse_id=${w.id}`, reason), opts: { method: 'POST' }, onSuccess: () => {}, successMessage: `已分配仓库 ${w.name}` },
+                        '分配仓库', sigPayload);
+                    if (!ok) { showToast('已取消仓库变更', 'info'); return; }
+                    done.push(`分配 ${w.name}`);
+                }
+                for (const w of removes) {
+                    const sigPayload = { user_id: id, warehouse_id: w.id, reason };
+                    const ok = await signAction(
+                        { action: 'USER_WAREHOUSE_UNASSIGN', entity_type: 'User', entity_id: `${id}:${w.id}`, meaning: 'REVIEW' },
+                        { path: withReason(`/users/${id}/unassign-warehouse?warehouse_id=${w.id}`, reason), opts: { method: 'DELETE' }, onSuccess: () => {}, successMessage: `已解除仓库 ${w.name}` },
+                        '取消仓库分配', sigPayload);
+                    if (!ok) { showToast('已取消仓库变更', 'info'); return; }
+                    done.push(`解除 ${w.name}`);
+                }
+                if (done.length) showToast(`仓库变更完成：${done.join('、')}`, 'success');
+                await load();
+            } catch (e) {
+                showToast(e.message || '仓库变更失败', 'error');
             }
-            for (const w of removes) {
-                signAction({ action: 'USER_WAREHOUSE_UNASSIGN', entity_type: 'User', entity_id: `${id}:${w.id}`, meaning: 'REVIEW' },
-                    { path: withReason(`/users/${id}/unassign-warehouse?warehouse_id=${w.id}`, reason), opts: { method: 'DELETE' } }, '取消仓库分配');
-            }
-            showToast(`已发起 ${adds.length} 个分配、${removes.length} 个解除的签名确认`, 'info');
         });
     }
 
