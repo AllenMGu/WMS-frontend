@@ -50,10 +50,10 @@ function renderTable() {
             <td style="white-space:normal;max-width:260px">${esc(p.scope_summary)}</td>
             <td>${statusBadge(p.status)}</td>
             <td class="actions">
-                ${p.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('maintenance').submitPlan(${p.id})"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
-                ${p.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="PG('maintenance').approvePlan(${p.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
-                ${p.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="PG('maintenance').viewItems(${p.id})"><i class="fa fa-search"></i> 检查</button>` : ''}
-                ${p.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="PG('maintenance').completePlan(${p.id})"><i class="fa fa-flag-checkered"></i> 完成</button>` : ''}
+                ${p.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" data-action="maintenance.submitPlan" data-arg1="${p.id}"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
+                ${p.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" data-action="maintenance.approvePlan" data-arg1="${p.id}"><i class="fa fa-check"></i> 批准</button>` : ''}
+                ${p.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" data-action="maintenance.viewItems" data-arg1="${p.id}"><i class="fa fa-search"></i> 检查</button>` : ''}
+                ${p.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" data-action="maintenance.completePlan" data-arg1="${p.id}"><i class="fa fa-flag-checkered"></i> 完成</button>` : ''}
             </td>
         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无养护计划</div></td></tr>';
 }
@@ -142,7 +142,7 @@ function viewItems(planId) {
                             <td>${statusBadge(i.status)}</td>
                             <td>${fmtD(i.next_due_on)}</td>
                             <td class="actions">
-                                ${['PENDING', 'DRAFT'].includes(i.status) ? `<button class="btn btn-link btn-sm" onclick="PG('maintenance').inspectItem(${planId}, ${i.id})"><i class="fa fa-stethoscope"></i> 检查</button>` : ''}
+                                ${['PENDING', 'DRAFT'].includes(i.status) ? `<button class="btn btn-link btn-sm" data-action="maintenance.inspectItem" data-arg1="${planId}" data-arg2="${i.id}"><i class="fa fa-stethoscope"></i> 检查</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">无明细</div></td></tr>'}</tbody>
                 </table>

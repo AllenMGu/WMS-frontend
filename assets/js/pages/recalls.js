@@ -61,10 +61,10 @@ async function renderRecalls(box) {
                             <td style="white-space:normal">${(r.batches || []).map(b => `<span class="text-xs text-gray-600">批次#${b.batch_id}（收${fmtNum(b.target_shipped_quantity)}/回${fmtNum(b.recovered_quantity)}）</span><br>`).join('')}</td>
                             <td>${(r.targets || []).length}</td>
                             <td class="actions">
-                                ${r.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('recalls').activateRecall(${r.id})"><i class="fa fa-play"></i> 启动</button>` : ''}
-                                ${['DRAFT', 'ACTIVE'].includes(r.status) ? `<button class="btn btn-link btn-sm" onclick="PG('recalls').progressRecall(${r.id})"><i class="fa fa-file-text-o"></i> 进展报告</button>` : ''}
-                                ${r.status === 'ACTIVE' ? `<button class="btn btn-link btn-sm" onclick="PG('recalls').viewRecall(${r.id})"><i class="fa fa-bell"></i> 通知目标</button><button class="btn btn-link btn-sm" onclick="PG('recalls').closeRecall(${r.id})"><i class="fa fa-check"></i> 关闭</button>` : ''}
-                                ${r.status === 'CLOSED' && !r.completion_report ? `<button class="btn btn-link btn-sm" onclick="PG('recalls').completionReport(${r.id})"><i class="fa fa-file-text"></i> 完成报告</button>` : ''}
+                                ${r.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" data-action="recalls.activateRecall" data-arg1="${r.id}"><i class="fa fa-play"></i> 启动</button>` : ''}
+                                ${['DRAFT', 'ACTIVE'].includes(r.status) ? `<button class="btn btn-link btn-sm" data-action="recalls.progressRecall" data-arg1="${r.id}"><i class="fa fa-file-text-o"></i> 进展报告</button>` : ''}
+                                ${r.status === 'ACTIVE' ? `<button class="btn btn-link btn-sm" data-action="recalls.viewRecall" data-arg1="${r.id}"><i class="fa fa-bell"></i> 通知目标</button><button class="btn btn-link btn-sm" data-action="recalls.closeRecall" data-arg1="${r.id}"><i class="fa fa-check"></i> 关闭</button>` : ''}
+                                ${r.status === 'CLOSED' && !r.completion_report ? `<button class="btn btn-link btn-sm" data-action="recalls.completionReport" data-arg1="${r.id}"><i class="fa fa-file-text"></i> 完成报告</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="10"><div class="empty-state">暂无召回记录</div></td></tr>'}</tbody>
                 </table>
@@ -165,7 +165,7 @@ function viewRecall(id) {
                             <td>${fmtNum(t.recovered_quantity)}</td>
                             <td>${statusBadge(t.notification_status)}</td>
                             <td class="actions">
-                                <button class="btn btn-link btn-sm" onclick="PG('recalls').notifyTarget(${id}, ${t.id})"><i class="fa fa-bell"></i> 记录通知</button>
+                                <button class="btn btn-link btn-sm" data-action="recalls.notifyTarget" data-arg1="${id}" data-arg2="${t.id}"><i class="fa fa-bell"></i> 记录通知</button>
                             </td>
                         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无目标，启动召回后自动识别受影响发运批次</div></td></tr>'}</tbody>
                 </table>
@@ -284,8 +284,8 @@ async function renderDrills(box) {
                             <td>${(d.targets || []).length}</td>
                             <td>${d.result ? badge(d.result, d.result === 'PASS' ? 'success' : 'danger') : '-'}</td>
                             <td class="actions">
-                                ${d.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('recalls').activateDrill(${d.id})"><i class="fa fa-play"></i> 启动</button>` : ''}
-                                ${d.status === 'ACTIVATED' ? `<button class="btn btn-link btn-sm" onclick="PG('recalls').viewDrill(${d.id})"><i class="fa fa-search"></i> 核验目标</button><button class="btn btn-link btn-sm" onclick="PG('recalls').completeDrill(${d.id})"><i class="fa fa-check"></i> 完成</button>` : ''}
+                                ${d.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" data-action="recalls.activateDrill" data-arg1="${d.id}"><i class="fa fa-play"></i> 启动</button>` : ''}
+                                ${d.status === 'ACTIVATED' ? `<button class="btn btn-link btn-sm" data-action="recalls.viewDrill" data-arg1="${d.id}"><i class="fa fa-search"></i> 核验目标</button><button class="btn btn-link btn-sm" data-action="recalls.completeDrill" data-arg1="${d.id}"><i class="fa fa-check"></i> 完成</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无召回演练</div></td></tr>'}</tbody>
                 </table>
@@ -358,7 +358,7 @@ function viewDrill(id) {
                             <td>${fmtNum(t.shipped_quantity)}</td>
                             <td>${statusBadge(t.verification_status)}</td>
                             <td class="actions">
-                                <button class="btn btn-link btn-sm" onclick="PG('recalls').verifyDrillTarget(${id}, ${t.id})"><i class="fa fa-check-circle"></i> 核验</button>
+                                <button class="btn btn-link btn-sm" data-action="recalls.verifyDrillTarget" data-arg1="${id}" data-arg2="${t.id}"><i class="fa fa-check-circle"></i> 核验</button>
                             </td>
                         </tr>`).join('') || '<tr><td colspan="6"><div class="empty-state">暂无目标</div></td></tr>'}</tbody>
                 </table>

@@ -923,10 +923,35 @@ function optionHTML(items, valueKey, labelKey, placeholder) {
 }
 
 /* ----------------------------- SPA 模块 ----------------------------- */
-/* 命名空间：PAGES[key] = { title, icon, desc, init, fn }，PG(key) 取模块的 fn（供 onclick 内联调用） */
+/* 命名空间：PAGES[key] = { title, icon, desc, init, fn }，PG(key) 取模块的 fn（供内联调用） */
 function PG(key) {
     return (window.PAGES && window.PAGES[key] && window.PAGES[key].fn) || {};
 }
+
+/* 事件委托：替代内联 onclick。按钮形如 data-action="module.method"
+   + data-arg1/data-arg2/...（数字或 null），由 document 级委托统一分发，
+   天然覆盖 innerHTML 动态生成的按钮，从而允许 CSP 去掉 script-src 'unsafe-inline'。 */
+document.addEventListener('click', function (e) {
+    const el = e.target.closest('[data-action]');
+    if (!el) return;
+    const action = el.dataset.action;
+    if (action === 'window.print') { window.print(); return; }
+    const dot = action.indexOf('.');
+    if (dot < 0) return;
+    const mod = action.slice(0, dot);
+    const method = action.slice(dot + 1);
+    const page = (window.PAGES && window.PAGES[mod] && window.PAGES[mod].fn) || {};
+    const fn = page[method];
+    if (typeof fn !== 'function') return;
+    const args = [];
+    for (let i = 1; i <= 5; i++) {
+        const k = 'arg' + i;
+        if (el.dataset[k] === undefined) break;
+        const v = el.dataset[k];
+        args.push(v === 'null' ? null : Number(v));
+    }
+    fn.apply(null, args);
+});
 
 /* ----------------------------- 页面引导 ----------------------------- */
 document.addEventListener('DOMContentLoaded', async function () {

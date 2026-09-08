@@ -84,12 +84,12 @@
                                 ${(o.allocations || []).filter(a => a.status !== 'CANCELLED').map(a => `<span class="text-xs text-blue-600"><i class="fa fa-link"></i> 分配${fmtNum(a.quantity)}（批次#${a.batch_id}）</span><br>`).join('')}
                             </td>
                             <td class="actions">
-                                ${o.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('sales').submitSO(${o.id})"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
-                                ${o.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="PG('sales').approveSO(${o.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
-                                ${o.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="PG('sales').allocateSO(${o.id})"><i class="fa fa-link"></i> FEFO分配</button>` : ''}
-                                ${o.status === 'ALLOCATED' ? `<button class="btn btn-link btn-sm" onclick="PG('sales').pickSO(${o.id})"><i class="fa fa-hand-rock-o"></i> 拣货</button>` : ''}
-                                ${o.status === 'PICKED' ? `<button class="btn btn-link btn-sm" onclick="PG('sales').prepareShipment(${o.id})"><i class="fa fa-truck"></i> 备货发运</button>` : ''}
-                                ${['DRAFT', 'SUBMITTED'].includes(o.status) ? `<button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="PG('sales').cancelSO(${o.id})"><i class="fa fa-times"></i> 取消</button>` : ''}
+                                ${o.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" data-action="sales.submitSO" data-arg1="${o.id}"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
+                                ${o.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" data-action="sales.approveSO" data-arg1="${o.id}"><i class="fa fa-check"></i> 批准</button>` : ''}
+                                ${o.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" data-action="sales.allocateSO" data-arg1="${o.id}"><i class="fa fa-link"></i> FEFO分配</button>` : ''}
+                                ${o.status === 'ALLOCATED' ? `<button class="btn btn-link btn-sm" data-action="sales.pickSO" data-arg1="${o.id}"><i class="fa fa-hand-rock-o"></i> 拣货</button>` : ''}
+                                ${o.status === 'PICKED' ? `<button class="btn btn-link btn-sm" data-action="sales.prepareShipment" data-arg1="${o.id}"><i class="fa fa-truck"></i> 备货发运</button>` : ''}
+                                ${['DRAFT', 'SUBMITTED'].includes(o.status) ? `<button class="btn btn-link btn-sm" style="color:var(--red-600)" data-action="sales.cancelSO" data-arg1="${o.id}"><i class="fa fa-times"></i> 取消</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无销售订单</div></td></tr>'}</tbody>
                 </table>
@@ -282,8 +282,8 @@
                             <td>${badge({ NORMAL: '常温', COLD: '冷藏', FROZEN: '冷冻' }[s.transport_mode] || s.transport_mode, s.transport_mode === 'NORMAL' ? 'info' : 'warning')}</td>
                             <td>${statusBadge(s.status)}</td>
                             <td class="actions">
-                                ${s.status === 'PREPARED' ? `<button class="btn btn-link btn-sm" onclick="PG('sales').reviewShipment(${s.id})"><i class="fa fa-check-circle"></i> 复核</button>` : ''}
-                                ${s.status === 'REVIEWED' ? `<button class="btn btn-link btn-sm" onclick="PG('sales').dispatchShipment(${s.id})"><i class="fa fa-paper-plane"></i> 发运</button>` : ''}
+                                ${s.status === 'PREPARED' ? `<button class="btn btn-link btn-sm" data-action="sales.reviewShipment" data-arg1="${s.id}"><i class="fa fa-check-circle"></i> 复核</button>` : ''}
+                                ${s.status === 'REVIEWED' ? `<button class="btn btn-link btn-sm" data-action="sales.dispatchShipment" data-arg1="${s.id}"><i class="fa fa-paper-plane"></i> 发运</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无发运单</div></td></tr>'}</tbody>
                 </table>

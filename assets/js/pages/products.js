@@ -71,8 +71,8 @@ async function renderProfiles(box) {
                             <td>${boolBadge(p.traceability_required)}</td>
                             <td>${statusBadge(p.status)}</td>
                             <td class="actions">
-                                <button class="btn btn-link btn-sm" onclick="PG('products').openProfileModal(${p.goods_id}, ${p.id})"><i class="fa fa-edit"></i> 编辑</button>
-                                ${p.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('products').approveProfile(${p.goods_id})"><i class="fa fa-check"></i> 批准</button>` : ''}
+                                <button class="btn btn-link btn-sm" data-action="products.openProfileModal" data-arg1="${p.goods_id}" data-arg2="${p.id}"><i class="fa fa-edit"></i> 编辑</button>
+                                ${p.status === 'PENDING' ? `<button class="btn btn-link btn-sm" data-action="products.approveProfile" data-arg1="${p.goods_id}"><i class="fa fa-check"></i> 批准</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="11"><div class="empty-state">暂无品种档案</div></td></tr>'}</tbody>
                 </table>
@@ -81,7 +81,7 @@ async function renderProfiles(box) {
             <div class="card-body">
                 <div class="text-sm font-medium mb-2" style="color:var(--gray-500)">未建档货物（${unprofiled.length}）</div>
                 <div class="flex flex-wrap gap-1">
-                    ${unprofiled.slice(0, 20).map(g => `<button class="btn btn-secondary btn-xs" onclick="PG('products').openProfileModal(${g.id}, null)">${esc(g.name)}</button>`).join('')}
+                    ${unprofiled.slice(0, 20).map(g => `<button class="btn btn-secondary btn-xs" data-action="products.openProfileModal" data-arg1="${g.id}" data-arg2="null">${esc(g.name)}</button>`).join('')}
                     ${unprofiled.length > 20 ? `<span class="text-xs text-gray-400">等 ${unprofiled.length} 项</span>` : ''}
                 </div>
             </div>` : ''}
@@ -310,7 +310,7 @@ async function renderHolds(box) {
                             <td>${fmtDT(h.initiated_at)}</td>
                             <td>${statusBadge(h.status)}</td>
                             <td class="actions">
-                                ${h.status === 'ACTIVE' ? `<button class="btn btn-link btn-sm" onclick="PG('products').releaseHold(${h.id})"><i class="fa fa-unlock"></i> 解除</button>` : ''}
+                                ${h.status === 'ACTIVE' ? `<button class="btn btn-link btn-sm" data-action="products.releaseHold" data-arg1="${h.id}"><i class="fa fa-unlock"></i> 解除</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无质量锁定</div></td></tr>'}</tbody>
                 </table>

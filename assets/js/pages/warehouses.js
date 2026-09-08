@@ -65,8 +65,8 @@
             const locCount = locations.filter(l => l.warehouse_id === w.id).length;
             const active = w.is_active !== false;
             const actions = isAdmin() ? `
-            <button class="btn btn-link btn-sm" onclick="PG('warehouses').openWarehouseModal(${w.id})"><i class="fa fa-pencil"></i> 编辑</button>
-            <button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="PG('warehouses').toggleWarehouse(${w.id})"><i class="fa ${active ? 'fa-ban' : 'fa-play'}"></i> ${active ? '停用' : '启用'}</button>` : '';
+            <button class="btn btn-link btn-sm" data-action="warehouses.openWarehouseModal" data-arg1="${w.id}"><i class="fa fa-pencil"></i> 编辑</button>
+            <button class="btn btn-link btn-sm" style="color:var(--red-600)" data-action="warehouses.toggleWarehouse" data-arg1="${w.id}"><i class="fa ${active ? 'fa-ban' : 'fa-play'}"></i> ${active ? '停用' : '启用'}</button>` : '';
             return `
         <tr class="wh-row ${selectedWarehouseId === w.id ? 'row-selected' : ''}" data-id="${w.id}" style="cursor:pointer">
             <td>${w.id}</td>
@@ -97,8 +97,8 @@
         tbody.innerHTML = rows.map(l => {
             const active = l.is_active !== false;
             const actions = isAdmin() ? `
-            <button class="btn btn-link btn-sm" onclick="PG('warehouses').openLocationModal(${l.id})"><i class="fa fa-pencil"></i> 编辑</button>
-            <button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="PG('warehouses').deleteLocation(${l.id})"><i class="fa fa-trash"></i> 删除</button>` : '';
+            <button class="btn btn-link btn-sm" data-action="warehouses.openLocationModal" data-arg1="${l.id}"><i class="fa fa-pencil"></i> 编辑</button>
+            <button class="btn btn-link btn-sm" style="color:var(--red-600)" data-action="warehouses.deleteLocation" data-arg1="${l.id}"><i class="fa fa-trash"></i> 删除</button>` : '';
             return `
         <tr>
             <td>${l.id}</td>

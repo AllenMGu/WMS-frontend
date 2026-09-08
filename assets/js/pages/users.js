@@ -63,8 +63,8 @@
         ub.innerHTML = users.map(u => {
             const active = u.is_active !== false;
             const actions = isAdmin() ? `
-            ${active ? `<button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="PG('users').disableUser(${u.id})"><i class="fa fa-ban"></i> 停用</button>` : badge('需审批启用', 'warning')}
-            ${u.role !== 'admin' ? `<button class="btn btn-link btn-sm" onclick="PG('users').openAssignWarehouses(${u.id})"><i class="fa fa-building"></i> 分配仓库</button>` : ''}` : '';
+            ${active ? `<button class="btn btn-link btn-sm" style="color:var(--red-600)" data-action="users.disableUser" data-arg1="${u.id}"><i class="fa fa-ban"></i> 停用</button>` : badge('需审批启用', 'warning')}
+            ${u.role !== 'admin' ? `<button class="btn btn-link btn-sm" data-action="users.openAssignWarehouses" data-arg1="${u.id}"><i class="fa fa-building"></i> 分配仓库</button>` : ''}` : '';
             return `
         <tr>
             <td>${u.id}</td>
@@ -87,7 +87,7 @@
             <td>${fmtDT(r.review_due_at)}</td>
             <td>${r.is_active ? badge('有效', 'success') : badge('已撤销', 'gray')}</td>
             <td class="actions">
-                ${r.is_active ? `<button class="btn btn-link btn-sm" onclick="PG('users').reviewRole(${r.id})"><i class="fa fa-refresh"></i> 复核</button><button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="PG('users').revokeRole(${r.id})"><i class="fa fa-ban"></i> 撤销</button>` : ''}
+                ${r.is_active ? `<button class="btn btn-link btn-sm" data-action="users.reviewRole" data-arg1="${r.id}"><i class="fa fa-refresh"></i> 复核</button><button class="btn btn-link btn-sm" style="color:var(--red-600)" data-action="users.revokeRole" data-arg1="${r.id}"><i class="fa fa-ban"></i> 撤销</button>` : ''}
             </td>
         </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无岗位授权（首次需先授予 QUALITY_MANAGER）</div></td></tr>';
     }

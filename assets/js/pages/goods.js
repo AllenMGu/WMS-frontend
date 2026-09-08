@@ -62,8 +62,8 @@
             <td>${esc(g.price ?? '-')}</td>
             <td>${fmtDT(g.create_time)}</td>
             <td class="actions">
-                <button class="btn btn-link btn-sm" onclick="PG('goods').openGoodsModal(${g.id})"><i class="fa fa-edit"></i> 编辑</button>
-                <button class="btn btn-link btn-sm" style="color:var(--red-600)" onclick="PG('goods').deleteGoods(${g.id})"><i class="fa fa-trash"></i> 删除</button>
+                <button class="btn btn-link btn-sm" data-action="goods.openGoodsModal" data-arg1="${g.id}"><i class="fa fa-edit"></i> 编辑</button>
+                <button class="btn btn-link btn-sm" style="color:var(--red-600)" data-action="goods.deleteGoods" data-arg1="${g.id}"><i class="fa fa-trash"></i> 删除</button>
             </td>
         </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无货物，点击右上角新增或 Excel 导入</div></td></tr>';
     }

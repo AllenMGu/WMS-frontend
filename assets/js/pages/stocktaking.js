@@ -49,11 +49,11 @@ function renderTable() {
             <td style="white-space:normal;max-width:260px">${esc(p.scope_summary)}</td>
             <td>${statusBadge(p.status)}</td>
             <td class="actions">
-                ${p.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" onclick="PG('stocktaking').submitPlan(${p.id})"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
-                ${p.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" onclick="PG('stocktaking').approvePlan(${p.id})"><i class="fa fa-check"></i> 批准</button>` : ''}
-                ${['APPROVED', 'REVIEWED'].includes(p.status) ? `<button class="btn btn-link btn-sm" onclick="PG('stocktaking').viewPlan(${p.id})"><i class="fa fa-eye"></i> 查看/实盘</button>` : ''}
-                ${['APPROVED', 'REVIEWED'].includes(p.status) ? `<button class="btn btn-link btn-sm" onclick="PG('stocktaking').reviewPlan(${p.id})"><i class="fa fa-balance-scale"></i> 差异复核</button>` : ''}
-                ${p.status === 'REVIEWED' ? `<button class="btn btn-link btn-sm" onclick="PG('stocktaking').applyAdjust(${p.id})"><i class="fa fa-wrench"></i> 执行调整</button>` : ''}
+                ${p.status === 'DRAFT' ? `<button class="btn btn-link btn-sm" data-action="stocktaking.submitPlan" data-arg1="${p.id}"><i class="fa fa-paper-plane"></i> 提交</button>` : ''}
+                ${p.status === 'SUBMITTED' ? `<button class="btn btn-link btn-sm" data-action="stocktaking.approvePlan" data-arg1="${p.id}"><i class="fa fa-check"></i> 批准</button>` : ''}
+                ${['APPROVED', 'REVIEWED'].includes(p.status) ? `<button class="btn btn-link btn-sm" data-action="stocktaking.viewPlan" data-arg1="${p.id}"><i class="fa fa-eye"></i> 查看/实盘</button>` : ''}
+                ${['APPROVED', 'REVIEWED'].includes(p.status) ? `<button class="btn btn-link btn-sm" data-action="stocktaking.reviewPlan" data-arg1="${p.id}"><i class="fa fa-balance-scale"></i> 差异复核</button>` : ''}
+                ${p.status === 'REVIEWED' ? `<button class="btn btn-link btn-sm" data-action="stocktaking.applyAdjust" data-arg1="${p.id}"><i class="fa fa-wrench"></i> 执行调整</button>` : ''}
             </td>
         </tr>`).join('') || '<tr><td colspan="6"><div class="empty-state">暂无盘点计划</div></td></tr>';
 }
@@ -140,7 +140,7 @@ function viewPlan(planId) {
                             <td>${i.count_round}</td>
                             <td>${statusBadge(i.status)}</td>
                             <td class="actions">
-                                ${['APPROVED', 'REVIEWED'].includes(p.status) && i.status === 'PENDING' ? `<button class="btn btn-link btn-sm" onclick="PG('stocktaking').countItem(${planId}, ${i.id}, ${i.count_round})"><i class="fa fa-pencil"></i> 实盘</button>` : ''}
+                                ${['APPROVED', 'REVIEWED'].includes(p.status) && i.status === 'PENDING' ? `<button class="btn btn-link btn-sm" data-action="stocktaking.countItem" data-arg1="${planId}" data-arg2="${i.id}" data-arg3="${i.count_round}"><i class="fa fa-pencil"></i> 实盘</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="11"><div class="empty-state">无明细</div></td></tr>'}</tbody>
                 </table>

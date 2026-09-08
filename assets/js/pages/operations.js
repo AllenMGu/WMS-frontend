@@ -61,9 +61,9 @@ async function renderRotations(box) {
                             <td>${fmtDT(r.next_rotation_due_at)}</td>
                             <td>${statusBadge(r.status)}</td>
                             <td class="actions">
-                                ${r.status === 'REQUESTED' ? `<button class="btn btn-link btn-sm" onclick="PG('operations').decideRotation(${r.id}, 'SECRET_ROTATION_DECISION', 'GspSecretRotation', '/gsp/operations/secret-rotations/' + ${r.id} + '/decision')"><i class="fa fa-gavel"></i> 批准</button>` : ''}
-                                ${r.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="PG('operations').implementRotation(${r.id})"><i class="fa fa-wrench"></i> 实施</button>` : ''}
-                                ${r.status === 'IMPLEMENTED' ? `<button class="btn btn-link btn-sm" onclick="PG('operations').verifyRotation(${r.id})"><i class="fa fa-check-circle"></i> 核验</button>` : ''}
+                                ${r.status === 'REQUESTED' ? `<button class="btn btn-link btn-sm" data-action="operations.decideRotation" data-arg1="${r.id}"><i class="fa fa-gavel"></i> 批准</button>` : ''}
+                                ${r.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" data-action="operations.implementRotation" data-arg1="${r.id}"><i class="fa fa-wrench"></i> 实施</button>` : ''}
+                                ${r.status === 'IMPLEMENTED' ? `<button class="btn btn-link btn-sm" data-action="operations.verifyRotation" data-arg1="${r.id}"><i class="fa fa-check-circle"></i> 核验</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无轮换申请</div></td></tr>'}</tbody>
                 </table>
@@ -106,7 +106,10 @@ async function renderRotations(box) {
         });
     });
 }
-function decideRotation(id, action, entityType, path) {
+function decideRotation(id) {
+    const action = 'SECRET_ROTATION_DECISION';
+    const entityType = 'GspSecretRotation';
+    const path = '/gsp/operations/secret-rotations/' + id + '/decision';
     const modal = openModal({
         title: '批准秘密轮换', size: 'md',
         body: `
@@ -178,7 +181,7 @@ async function renderBackups(box) {
                             <td class="text-xs">${esc((b.checksum_sha256 || '').slice(0, 12))}…</td>
                             <td>${b.review_result ? badge(b.review_result, b.review_result === 'ACCEPTED' ? 'success' : 'danger') : badge('待复核', 'warning')}</td>
                             <td class="actions">
-                                ${!b.review_result ? `<button class="btn btn-link btn-sm" onclick="PG('operations').reviewBackup(${b.id})"><i class="fa fa-check-circle"></i> 复核</button>` : ''}
+                                ${!b.review_result ? `<button class="btn btn-link btn-sm" data-action="operations.reviewBackup" data-arg1="${b.id}"><i class="fa fa-check-circle"></i> 复核</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="9"><div class="empty-state">暂无备份证据</div></td></tr>'}</tbody>
                 </table>
@@ -280,9 +283,9 @@ async function renderDrills(box) {
                             <td>${d.result ? badge(d.result, d.result === 'PASS' ? 'success' : 'danger') : '-'}</td>
                             <td>${statusBadge(d.status)}</td>
                             <td class="actions">
-                                ${d.status === 'REQUESTED' ? `<button class="btn btn-link btn-sm" onclick="PG('operations').drillDecision(${d.id})"><i class="fa fa-gavel"></i> 批准</button>` : ''}
-                                ${d.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" onclick="PG('operations').drillExecute(${d.id})"><i class="fa fa-play"></i> 执行</button>` : ''}
-                                ${d.status === 'EXECUTED' ? `<button class="btn btn-link btn-sm" onclick="PG('operations').drillVerify(${d.id})"><i class="fa fa-check-circle"></i> 核验</button>` : ''}
+                                ${d.status === 'REQUESTED' ? `<button class="btn btn-link btn-sm" data-action="operations.drillDecision" data-arg1="${d.id}"><i class="fa fa-gavel"></i> 批准</button>` : ''}
+                                ${d.status === 'APPROVED' ? `<button class="btn btn-link btn-sm" data-action="operations.drillExecute" data-arg1="${d.id}"><i class="fa fa-play"></i> 执行</button>` : ''}
+                                ${d.status === 'EXECUTED' ? `<button class="btn btn-link btn-sm" data-action="operations.drillVerify" data-arg1="${d.id}"><i class="fa fa-check-circle"></i> 核验</button>` : ''}
                             </td>
                         </tr>`).join('') || '<tr><td colspan="8"><div class="empty-state">暂无恢复演练</div></td></tr>'}</tbody>
                 </table>
