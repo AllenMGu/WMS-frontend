@@ -52,6 +52,81 @@ function esc(value) {
 // HTML 转义后的纯文本格式器：这三个函数的结果通常被直接拼进 innerHTML。
 // 对不可解析输入原样回退前先转义，防止攻击者控制的字符串（如由 API 返回的
 // 异常字段值）在忘记包 esc() 的调用点形成 XSS —— 纵深防御。
+
+/* ----------------------------- 动作/对象/含义 中文映射 ----------------------------- */
+// action 英文词根字典：把 USER_ACCESS_REVOKED → “用户访问撤销”、BATCH_CREATED → “批次创建”
+const ZH_WORD = {
+    // 动作
+    CREATED: '创建', UPDATED: '更新', DELETED: '删除', REVOKED: '撤销', APPROVED: '批准',
+    REJECTED: '驳回', REJECTION: '驳回', SUBMITTED: '提交', SUSPENDED: '停用', SUSPEND: '停用',
+    RELEASED: '解除', ACCEPTED: '验收', ACCEPTANCE: '验收', VERIFIED: '核验', VERIFY: '核验',
+    RECONCILED: '核对', RESOLVED: '处理', CLOSED: '关闭', RAISED: '触发', APPLIED: '应用',
+    IMPLEMENTED: '实施', GENERATED: '生成', ISSUED: '签发', HELD: '冻结', REQUIRED: '待处理',
+    ADDED: '新增', ASSIGNED: '分配', UNASSIGNED: '解除分配', UNASSIGN: '解除分配', ASSIGN: '分配', RECONFIRMED: '再确认',
+    REQUEUED: '重新入队', RECORDED: '记录', ACKNOWLEDGED: '确认', REVIEWED: '复核',
+    APPROVAL: '批准', REVIEW: '复核', RESPONSIBILITY: '责任认定', CONFIRMATION: '确认',
+    INSPECTED: '验收', DISPATCHED: '发运', RECEIVED: '收货', IMPORTED: '导入', RETIRED: '退休',
+    OFFBOARDED: '离场', VERIFICATION: '核验', ACTIVATED: '激活',
+    // 对象/主体
+    USER: '用户', WAREHOUSE: '仓库', ACCESS: '访问', ROLE: '岗位', BATCH: '批次',
+    DOCUMENT: '文档', RECORD: '记录', EQUIPMENT: '设备', ENVIRONMENT: '环境', DEVICE: '设备/仪器',
+    ALARM: '报警', CARRIER: '承运商', PARTNER: '合作方', RECALL: '召回', EVENT: '事件',
+    CAPA: '纠正措施', COMPLIANCE: '合规', CONTROLLED: '受控', FILES: '文件', UPLOADER: '上传人',
+    ELECTRONIC: '电子', SIGNATURE: '签名', QUALITY: '质量', DISPOSITION: '处置',
+    PURCHASE: '采购', SALES: '销售', RETURN: '退货', STOCKTAKE: '盘点', MAINTENANCE: '养护',
+    TRANSPORT: '运输', DELIVERY: '发运', SECRET: '密钥', ROTATION: '轮换', BACKUP: '备份',
+    RECOVERY: '恢复', DRILL: '演练', SCOPE: '范围', AUTHORIZATION: '授权', BINDING: '绑定',
+    SETTING: '设置', CALENDAR: '日历', MESSAGE: '消息', INTEGRATION: '集成', EXPIRY: '效期',
+    ALERT: '预警', PROFILE: '档案', DRUG: '药品', SUPPLIER: '供应商', PRODUCT: '品种',
+    HOLD: '冻结', INSPECT: '验收', RECEIPT: '收货', SHIPMENT: '发运', ORDER: '订单',
+    ITEM: '条目', BULK: '批量', IMPORT: '导入', EVIDENCE: '证据', ACTIVITY: '活动',
+    COPY: '副本', EXCURSION: '偏差', REVIEWER: '复核', DISPATCH: '发运', DECISION: '决策',
+    DESTROY: '销毁', SAMPLE: '取样', STOCK: '库存', LOCATION: '库位', GOODS: '货物',
+    LICENSE: '证照', SCOPE_APPROVAL: '经营范围批准', REPORT: '报告', COMPLETION: '完成',
+    TARGET: '对象', NOTIFICATION: '通知', LOGIN: '登录', PASSWORD: '密码', LOGOUT: '登出',
+    // GSP 模型短名
+    Gsp: '', Receipt: '收货单', SalesReturn: '销退', Nonconforming: '不合格', Quality: '质量',
+    Transport: '运输', Maintenance: '养护', Stocktake: '盘点', Environment: '环境', Recall: '召回',
+    Partner: '合作方', BusinessPartner: '业务伙伴', SupplierProductAuthorization: '供应品种授权',
+    DrugProfile: '药品档案', DrugBatch: '药品批次', BatchStock: '批次库存', QualityHold: '质量冻结',
+    Signature: '签名', Challenge: '签名挑战', AuditEvent: '审计事件', AuditVerification: '审计校验',
+    IntegrationMessage: '集成消息', ControlledFile: '受控文件', SecretRotation: '密钥轮换',
+    BackupEvidence: '备份证据', RecoveryDrill: '恢复演练', ComplianceSetting: '合规设置',
+    RoleAssignment: '岗位授权', Carrier: '承运商', Vehicle: '车辆', Driver: '司机',
+};
+const ZH_ENTITY = {
+    User: '用户', Warehouse: '仓库', UserWarehouse: '用户仓库', Location: '库位', Goods: '货物',
+    GspRoleAssignment: 'GSP岗位授权', GspBusinessPartner: '合作方',
+    GspSupplierProductAuthorization: '供应品种授权', GspDrugProfile: '药品档案',
+    GspDrugBatch: '药品批次', GspBatchStock: '批次库存', GspQualityHold: '质量冻结',
+    GspPartnerDocument: '合作方证照', GspAuditEvent: '审计事件', GspAuditVerification: '审计校验',
+    GspSignatureChallenge: '签名挑战', GspElectronicSignature: '电子签名',
+    GspComplianceSetting: '合规设置', GspCarrier: '承运商', GspTransportException: '运输异常',
+    GspTransportTask: '运输任务', GspMaintenancePlan: '养护计划', GspEnvironmentDevice: '环境设备',
+    GspEnvironmentAlarm: '环境报警', GspEnvironmentAssignment: '环境监测分配',
+    GspRecall: '召回', GspRecallBatch: '召回批次', GspRecallTarget: '召回对象',
+    GspNonconformingRecord: '不合格品记录', GspPurchaseOrder: '采购订单',
+    GspPurchaseReturn: '购进退货', GspSalesOrder: '销售订单', GspShipment: '发运',
+    GspStocktakePlan: '盘点计划', GspSecretRotation: '密钥轮换', GspBackupEvidence: '备份证据',
+    GspRecoveryDrill: '恢复演练', GspIntegrationMessage: '集成消息', GspControlledFile: '受控文件',
+    TestEntity: '测试实体', UserDirectoryItem: '用户目录',
+};
+function zhAction(code) {
+    if (!code) return '';
+    const words = code.split('_').map(w => ZH_WORD[w] || w);
+    return words.join('');
+}
+function zhEntity(type) {
+    if (!type) return '';
+    return ZH_ENTITY[type] || type;
+}
+/* 英文含义码(meaning) → 中文 */
+const ZH_MEANING = {
+    APPROVAL: '批准', REVIEW: '复核', RELEASE: '解除', CONFIRMATION: '确认',
+    RESPONSIBILITY: '责任认定', REJECTION: '驳回', CONFIRM: '确认', REVOKE: '撤销',
+};
+function zhMeaning(m) { return ZH_MEANING[m] || m; }
+
 function fmtDT(value) {
     if (!value) return '-';
     const d = new Date(value);
@@ -813,24 +888,30 @@ function renderShell(activePage, pageTitle) {
         const visibleItems = g.items.filter(it => canAccessPage(it.page));
         if (!visibleItems.length) return '';
         return `
-        <div class="nav-group">
-            <div class="nav-group-title">${esc(g.title)}</div>
-            ${visibleItems.map(it => `
-                <a href="${it.page === 'all' ? 'app.html' : it.page}" class="nav-item ${activePage === it.page ? 'active' : ''}" data-route="${it.page}">
-                    <i class="fa ${it.icon}"></i><span>${esc(it.label)}</span>
+        <div class="nav-group" data-group="${esc(g.title)}">
+            <button type="button" class="nav-group-title" aria-expanded="true">
+                <span>${esc(g.title)}</span><i class="fa fa-chevron-down group-chev" aria-hidden="true"></i>
+            </button>
+            <div class="nav-group-items">${visibleItems.map(it => `
+                <a href="${it.page === 'all' ? 'app.html' : it.page}" class="nav-item ${activePage === it.page ? 'active' : ''}" data-route="${it.page}" title="${esc(it.label)}">
+                    <i class="fa ${it.icon}" aria-hidden="true"></i><span>${esc(it.label)}</span>
                 </a>`).join('')}
+            </div>
         </div>`;
     }).join('');
     const initials = currentUser ? (currentUser.full_name || currentUser.username || 'U').charAt(0).toUpperCase() : 'U';
     const userName = currentUser ? (currentUser.full_name || currentUser.username) : '加载中...';
     shell.innerHTML = `
-        <aside class="sidebar">
-            <div class="p-4 flex items-center gap-2 border-b">
-                <div class="user-avatar">${esc(initials)}</div>
-                <div>
+        <aside class="sidebar" id="appSidebar">
+            <div class="p-4 flex items-center gap-2 border-b sidebar-head">
+                <div class="user-avatar sidebar-avatar">${esc(initials)}</div>
+                <div class="sidebar-brand">
                     <div class="font-semibold" style="font-size:13px">药品GSP仓储</div>
                     <div class="text-xs text-gray-500">质量管理系统</div>
                 </div>
+                <button type="button" class="sidebar-toggle" id="sidebarToggle" title="折叠菜单" aria-label="折叠/展开菜单">
+                    <i class="fa fa-angle-left" aria-hidden="true"></i>
+                </button>
             </div>
             <nav class="sidebar-nav">${sidebar}</nav>
         </aside>
@@ -860,6 +941,59 @@ function renderShell(activePage, pageTitle) {
     menuBtn.addEventListener('click', (e) => { e.stopPropagation(); dropdown.classList.toggle('hidden'); });
     document.addEventListener('click', () => dropdown.classList.add('hidden'));
     shell.querySelector('#logoutButton').addEventListener('click', (e) => { e.preventDefault(); logout(); });
+    // 菜单栏折叠：224px ↔ 56px，状态记忆到 localStorage
+    const sidebarEl = shell.querySelector('#appSidebar');
+    const toggleBtn = shell.querySelector('#sidebarToggle');
+    const applyCollapsed = (collapsed) => {
+        sidebarEl.classList.toggle('collapsed', collapsed);
+        toggleBtn.innerHTML = collapsed
+            ? '<i class="fa fa-angle-right" aria-hidden="true"></i>'
+            : '<i class="fa fa-angle-left" aria-hidden="true"></i>';
+        toggleBtn.title = collapsed ? '展开菜单' : '折叠菜单';
+    };
+    applyCollapsed(localStorage.getItem('wms_sidebar_collapsed') === '1');
+    toggleBtn.addEventListener('click', () => {
+        const collapsed = !sidebarEl.classList.contains('collapsed');
+        applyCollapsed(collapsed);
+        try { localStorage.setItem('wms_sidebar_collapsed', collapsed ? '1' : '0'); } catch (e) { /* 忽略 */ }
+    });
+    // 导航栏分类折叠：分组标题可点击展开/折叠。首次进入默认只展开"当前激活页所在组"，
+    // 其余分组折叠以缩短菜单；用户手动展开/折叠的偏好记忆在 localStorage。
+    (function initGroupCollapse() {
+        const groups = Array.from(sidebarEl.querySelectorAll('.nav-group'));
+        if (!groups.length) return;
+        // 首次默认折叠：仅保留含激活项的组
+        const defaultCollapsed = groups
+            .filter(gEl => !gEl.querySelector('.nav-item.active'))
+            .map(gEl => gEl.getAttribute('data-group'));
+        let collapsedSet;
+        try {
+            const raw = localStorage.getItem('wms_collapsed_groups');
+            collapsedSet = new Set(raw === null ? defaultCollapsed : JSON.parse(raw));
+        } catch (e) { collapsedSet = new Set(defaultCollapsed); }
+        const persist = () => {
+            try { localStorage.setItem('wms_collapsed_groups', JSON.stringify([...collapsedSet])); } catch (e) { /* 忽略 */ }
+        };
+        const applyOne = (gEl) => {
+            const name = gEl.getAttribute('data-group');
+            const collapsed = collapsedSet.has(name);
+            gEl.classList.toggle('collapsed', collapsed);
+            const chev = gEl.querySelector('.group-chev');
+            if (chev) chev.className = 'fa ' + (collapsed ? 'fa-chevron-right' : 'fa-chevron-down') + ' group-chev';
+            const btn = gEl.querySelector('.nav-group-title');
+            if (btn) btn.setAttribute('aria-expanded', String(!collapsed));
+        };
+        groups.forEach((gEl) => {
+            applyOne(gEl);
+            gEl.querySelector('.nav-group-title').addEventListener('click', (ev) => {
+                ev.preventDefault();
+                const name = gEl.getAttribute('data-group');
+                if (collapsedSet.has(name)) collapsedSet.delete(name); else collapsedSet.add(name);
+                persist();
+                applyOne(gEl);
+            });
+        });
+    })();
     if (currentUser) {
         shell.querySelector('#userRoleText').textContent = (currentUser.role || 'operator');
         shell.querySelector('#userWarehouseText').textContent = currentUser.current_warehouse_name || '未指定';
@@ -892,6 +1026,40 @@ async function refQualityUsers(force) {
     if (!force && refCache.qualityUsers) return refCache.qualityUsers;
     refCache.qualityUsers = await apiAll('/gsp/reference/users');
     return refCache.qualityUsers;
+}
+/* 全量用户（含停用）id→显示名 映射：审计/签名台账把 User 实体/操作人解析成用户名 */
+let userLabelMap = null;
+async function refAllUsers(force) {
+    if (!force && refCache.allUsers) return refCache.allUsers;
+    refCache.allUsers = await api('/gsp/reference/users?active_only=false', { logoutOn401: false });
+    return refCache.allUsers;
+}
+async function ensureUserLabelMap(force) {
+    if (userLabelMap && !force) return userLabelMap;
+    userLabelMap = {};
+    try {
+        const rows = await refAllUsers(force);
+        (Array.isArray(rows) ? rows : []).forEach((u) => {
+            if (u && u.id != null) userLabelMap[u.id] = { full_name: u.full_name, username: u.username };
+        });
+    } catch (e) { userLabelMap = {}; /* 无权限等：回落显示 #id */ }
+    return userLabelMap;
+}
+function userNameFromId(id) {
+    const n = Number(id);
+    if (!userLabelMap || !userLabelMap[n]) return null;
+    const u = userLabelMap[n];
+    // 真实数据 full_name 是真名,与 username 不同 → 显示全名(更友好)
+    // 测试/占位数据 full_name 与 username 相同(如"目标操作员"+"目标操作员-abc")→ 显示 username(带后缀以区分)
+    if (u.full_name && u.username && u.full_name !== u.username) return u.full_name;
+    return u.username || u.full_name || ('#' + id);
+}
+/* User 实体解析：entity_id 可能是 user_id 或 "user_id:warehouse_id" */
+function entityUserLabel(entity_type, entity_id) {
+    if (entity_type !== 'User' && entity_type !== 'UserWarehouse') return null;
+    const s = String(entity_id == null ? '' : entity_id);
+    const uid = s.includes(':') ? Number(s.split(':')[0]) : Number(s);
+    return userNameFromId(uid);
 }
 async function refPartners(force) {
     if (!force && refCache.partners) return refCache.partners;

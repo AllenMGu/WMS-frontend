@@ -7,6 +7,8 @@
     const content = () => _el;
     let events = [];
     let verifications = [];
+    /* 最近一次哈希链校验结果（用于在展示审计事件前给用户一个完整性结论） */
+    let lastVerify = null;
 
     async function pageInit(el) { _el = el || document.getElementById('pageContent');
         render();
@@ -24,6 +26,7 @@
                 </div>
             </div>
             <div class="card-body">
+                ${lastVerify && !lastVerify.valid ? `<div class="alert alert-danger mb-3"><i class="fa fa-exclamation-triangle mr-2"></i>⚠ 审计链校验未通过${lastVerify.broken_event_id ? '（断裂 @ 事件 #' + lastVerify.broken_event_id + '）' : ''}，事件可能已被篡改，请勿据此进行合规判断。</div>` : ''}
                 <div class="filter-bar mb-3">
                     <input id="auEntityType" class="input-field" placeholder="对象类型，如 GspDrugBatch">
                     <input id="auEntityId" class="input-field" placeholder="对象ID">
@@ -36,6 +39,7 @@
                         <tbody id="auBody"></tbody>
                     </table>
                 </div>
+                <div class="text-xs text-gray-500 mt-2">当前页共 ${events.length} 条（按 limit 截取，过滤条件请在对象类型/对象ID 缩小范围）</div>
             </div>
         </div>
         <div class="card mt-4">
@@ -58,38 +62,53 @@
         document.getElementById('auVerifyBtn').addEventListener('click', verifyChain);
         document.getElementById('auRecordBtn').addEventListener('click', recordVerification);
         document.getElementById('auSearchBtn').addEventListener('click', () => load(true));
+        renderEvents();
     }
 
     async function load(search) {
         try {
+            // 哈希链防篡改：先做一次校验并记录（写 GspAuditVerification），再加载事件展示
+            // — 确保用户看到的事件已通过完整性校验（或明确告知链断裂/校验失败）
+            try {
+                lastVerify = await api('/gsp/audit-verifications', {
+                    method: 'POST',
+                    body: { trigger_source: 'MANUAL', evidence_ref: '页面打开主动校验', reason: '页面打开时主动校验审计链完整性' },
+                });
+            } catch (e) {
+                lastVerify = { valid: false, broken_event_id: '校验请求失败' + (e && e.status ? '（HTTP ' + e.status + '）' : '') };
+            }
             const et = document.getElementById('auEntityType').value.trim();
             const eid = document.getElementById('auEntityId').value.trim();
             const limit = document.getElementById('auLimit').value;
             const q = new URLSearchParams({ limit });
             if (et) q.set('entity_type', et);
             if (eid) q.set('entity_id', eid);
-            events = await apiAll('/gsp/audit-events?' + q.toString());
+            // 只拉当前 limit 一页（不再 apiAll 全量分页循环，避免一次拉 12 次）
+            events = await api('/gsp/audit-events?' + q.toString());
             verifications = await apiAll('/gsp/audit-verifications');
-            renderEvents();
-            const tbody2 = document.querySelectorAll('#auBody')[0].closest('.card').nextElementSibling;
-            const vrows = verifications.map(v => `
-            <tr><td>${v.id}</td><td>${badge(v.trigger_source === 'MANUAL' ? '手工' : '计划任务', 'info')}</td><td>${esc(v.evidence_ref)}</td><td>${v.checked_event_count}</td><td>${v.valid ? badge('有效', 'success') : badge(`断裂@${v.broken_event_id}`, 'danger')}</td><td>${fmtDT(v.verified_at)}</td></tr>`).join('');
-            tbody2.querySelector('tbody').innerHTML = vrows || '<tr><td colspan="6"><div class="empty-state">暂无校验记录</div></td></tr>';
+            await ensureUserLabelMap();
+            render();
         } catch (e) { showToast(e.message, 'error'); }
     }
 
     function renderEvents() {
         const tbody = document.getElementById('auBody');
-        tbody.innerHTML = events.map(e => `
+        tbody.innerHTML = events.map(e => {
+            const uLabel = entityUserLabel(e.entity_type, e.entity_id);
+            const objText = uLabel
+                ? `${zhEntity(e.entity_type)}：${esc(uLabel)}`
+                : `${zhEntity(e.entity_type)}#${esc(e.entity_id)}`;
+            return `
         <tr>
             <td>${e.id}</td>
-            <td>${e.actor_user_id}</td>
-            <td>${badge(e.action, 'info')}</td>
-            <td class="text-xs">${esc(e.entity_type)}#${esc(e.entity_id)}</td>
+            <td title="${esc(e.actor_username || '')}">${esc(e.actor_full_name || e.actor_username || e.actor_user_id)}</td>
+            <td title="${esc(e.action)}">${badge(zhAction(e.action), 'info')}</td>
+            <td class="text-xs" title="${esc(e.entity_type)}#${esc(e.entity_id)}">${objText}</td>
             <td style="white-space:normal;max-width:200px" class="text-xs">${esc(e.reason)}</td>
             <td class="text-xs" title="${esc(e.event_hash)}">${esc((e.event_hash || '').slice(0, 12))}…</td>
             <td>${fmtDT(e.occurred_at)}</td>
-        </tr>`).join('') || '<tr><td colspan="7"><div class="empty-state">暂无审计事件</div></td></tr>';
+        </tr>`;
+        }).join('') || '<tr><td colspan="7"><div class="empty-state">暂无审计事件</div></td></tr>';
     }
 
     async function verifyChain() {
