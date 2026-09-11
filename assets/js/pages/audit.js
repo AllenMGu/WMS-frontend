@@ -21,6 +21,15 @@
     /* 打开审计页时做一次哈希链校验并落校验记录（写 GspAuditVerification）：
        在展示事件前先给出完整性结论；仅会话内首次进入触发，
        之后查询/记录校验的 load() 刷新只读取数据，不再重复写记录 */
+    /* 区分「请求失败」与「确认断裂」：网络超时/403/500 等接口故障只是
+       「暂时无法完成完整性校验」，不得表述为链断裂或数据篡改（GSP 下会诱导错误的合规判断）。
+       若本会话已有「已验证的结论」（valid 为 true/false），请求失败不得把它覆盖掉；
+       仅在没有已验证结论时，才置为 request_failed 中性态 */
+    function markRequestFailed(e) {
+        if (lastVerify && lastVerify.valid !== null && lastVerify.valid !== undefined) return;
+        lastVerify = { request_failed: true, error: ((e && e.status) ? 'HTTP ' + e.status : (e && e.message)) || '请求失败' };
+    }
+
     async function autoVerifyOnce() {
         try {
             lastVerify = await api('/gsp/audit-verifications', {
@@ -28,7 +37,7 @@
                 body: { trigger_source: 'MANUAL', evidence_ref: '页面打开主动校验', reason: '页面打开时主动校验审计链完整性' },
             });
         } catch (e) {
-            lastVerify = { valid: false, broken_event_id: '校验请求失败' + (e && e.status ? '（HTTP ' + e.status + '）' : '') };
+            markRequestFailed(e);
         }
     }
 
@@ -43,7 +52,11 @@
                 </div>
             </div>
             <div class="card-body">
-                ${lastVerify && !lastVerify.valid ? `<div class="alert alert-danger mb-3"><i class="fa fa-exclamation-triangle mr-2"></i>⚠ 审计链校验未通过${lastVerify.broken_event_id ? '（断裂 @ 事件 #' + lastVerify.broken_event_id + '）' : ''}，事件可能已被篡改，请勿据此进行合规判断。</div>` : ''}
+                ${lastVerify ? (lastVerify.request_failed
+                    ? `<div class="alert alert-warning mb-3"><i class="fa fa-plug mr-2"></i>⚠ 暂时无法完成完整性校验${lastVerify.error ? '（' + esc(lastVerify.error) + '）' : ''}：校验接口请求失败，审计数据完整性状态未确认，请勿据此进行合规判断。可稍后点击「校验审计链」重试。</div>`
+                    : (lastVerify.valid
+                        ? `<div class="alert alert-success mb-3"><i class="fa fa-check-circle mr-2"></i>✅ 审计链校验通过${lastVerify.verified_at ? '（' + esc(fmtDT(lastVerify.verified_at)) + ' 校验）' : ''}，哈希链完整有效。</div>`
+                        : `<div class="alert alert-danger mb-3"><i class="fa fa-exclamation-triangle mr-2"></i>⚠ 审计链校验未通过${lastVerify.broken_event_id ? '（断裂 @ 事件 #' + lastVerify.broken_event_id + '）' : ''}，事件可能已被篡改，请勿据此进行合规判断。</div>`)) : ''}
                 <div class="filter-bar mb-3">
                     <input id="auEntityType" class="input-field" placeholder="对象类型，如 GspDrugBatch">
                     <input id="auEntityId" class="input-field" placeholder="对象ID">
@@ -123,6 +136,8 @@
     async function verifyChain() {
         try {
             const r = await api('/gsp/audit-events/verify');
+            lastVerify = r;   // 同步三态（有效/确认断裂/请求失败）并刷新顶部横幅，保证告警与最新校验结论一致
+            render();
             const modal = openModal({
                 title: '审计链校验结果', size: 'sm',
                 body: `
@@ -132,7 +147,12 @@
                     ${r.broken_event_id ? `<div class="text-sm text-gray-500 mt-1">断裂事件ID：${r.broken_event_id}</div>` : ''}
                 </div>`,
             });
-        } catch (e) { showToast(e.message, 'error'); }
+        } catch (e) {
+            // 手动校验请求失败：同样按「暂时无法完成校验」呈现，且不得掩盖已确认的校验结论
+            markRequestFailed(e);
+            render();
+            showToast(e.message, 'error');
+        }
     }
     function recordVerification() {
         const modal = openModal({

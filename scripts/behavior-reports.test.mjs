@@ -31,7 +31,7 @@ assert.ok(appjs.includes("'reports.html': '业务报表"), "HUB_DESCS reports");
 assert.ok(reports.includes("打印记录台账（正式受控 / 开发预览）"), "ledger heading");
 assert.ok(reports.includes("校验通过：预览记录内容与后端快照一致"), "preview verify wording");
 // 7) cache-busted assets so the new nav entry is not served stale
-assert.ok(apphtml.includes("20260911-auditfix2"), "asset version bumped");
+assert.ok(apphtml.includes("20260911-auditfix3"), "asset version bumped");
 // 8) 报表打印/预览隔离（审核 P1 两轮复审）。
 //    预览 iframe 带 sandbox="allow-modals"（禁脚本/禁同源，仅放行模态）——纯查看。
 assert.ok(/<iframe id="rpIframe" sandbox="allow-modals"/.test(reports),
