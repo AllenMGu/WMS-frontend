@@ -9,10 +9,27 @@
     let verifications = [];
     /* 最近一次哈希链校验结果（用于在展示审计事件前给用户一个完整性结论） */
     let lastVerify = null;
+    /* 自动校验只在整个会话首次进入本页面时触发一次（模块级状态随 SPA 生命周期保留） */
+    let autoVerifyDone = false;
 
     async function pageInit(el) { _el = el || document.getElementById('pageContent');
+        if (!autoVerifyDone) { autoVerifyDone = true; await autoVerifyOnce(); }
         render();
         await load();
+    }
+
+    /* 打开审计页时做一次哈希链校验并落校验记录（写 GspAuditVerification）：
+       在展示事件前先给出完整性结论；仅会话内首次进入触发，
+       之后查询/记录校验的 load() 刷新只读取数据，不再重复写记录 */
+    async function autoVerifyOnce() {
+        try {
+            lastVerify = await api('/gsp/audit-verifications', {
+                method: 'POST',
+                body: { trigger_source: 'MANUAL', evidence_ref: '页面打开主动校验', reason: '页面打开时主动校验审计链完整性' },
+            });
+        } catch (e) {
+            lastVerify = { valid: false, broken_event_id: '校验请求失败' + (e && e.status ? '（HTTP ' + e.status + '）' : '') };
+        }
     }
 
     function render() {
@@ -67,16 +84,8 @@
 
     async function load(search) {
         try {
-            // 哈希链防篡改：先做一次校验并记录（写 GspAuditVerification），再加载事件展示
-            // — 确保用户看到的事件已通过完整性校验（或明确告知链断裂/校验失败）
-            try {
-                lastVerify = await api('/gsp/audit-verifications', {
-                    method: 'POST',
-                    body: { trigger_source: 'MANUAL', evidence_ref: '页面打开主动校验', reason: '页面打开时主动校验审计链完整性' },
-                });
-            } catch (e) {
-                lastVerify = { valid: false, broken_event_id: '校验请求失败' + (e && e.status ? '（HTTP ' + e.status + '）' : '') };
-            }
+            // 只读取数据（事件/校验记录）。链校验的自动写入在 pageInit 首次进入时只执行一次，
+            // 查询、记录校验后的刷新不再写 GspAuditVerification 记录（避免台账重复写入）
             const et = document.getElementById('auEntityType').value.trim();
             const eid = document.getElementById('auEntityId').value.trim();
             const limit = document.getElementById('auLimit').value;

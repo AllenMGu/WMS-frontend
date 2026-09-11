@@ -423,13 +423,13 @@ function bindControlledFileInput(root, { fileSel, infoSel, refSel, hashSel = nul
     };
 }
 
-async function apiAll(path, pageSize = 100) {
+async function apiAll(path, pageSize = 100, extraOpts = {}) {
     const items = [];
     let previousPageSignature = null;
     for (let offset = 0, pageNumber = 0; ; offset += pageSize, pageNumber += 1) {
         if (pageNumber >= 10000) throw new ApiError('分页接口返回页数异常', 0, { path, pageSize });
         const separator = path.includes('?') ? '&' : '?';
-        const page = await api(`${path}${separator}limit=${pageSize}&offset=${offset}`);
+        const page = await api(`${path}${separator}limit=${pageSize}&offset=${offset}`, extraOpts);
         if (!Array.isArray(page)) throw new ApiError('分页接口返回格式无效', 0, page);
         const pageSignature = page.length
             ? JSON.stringify([page.length, page[0], page[page.length - 1]])
@@ -1031,7 +1031,7 @@ async function refQualityUsers(force) {
 let userLabelMap = null;
 async function refAllUsers(force) {
     if (!force && refCache.allUsers) return refCache.allUsers;
-    refCache.allUsers = await api('/gsp/reference/users?active_only=false', { logoutOn401: false });
+    refCache.allUsers = await apiAll('/gsp/reference/users?active_only=false', 100, { logoutOn401: false });
     return refCache.allUsers;
 }
 async function ensureUserLabelMap(force) {
